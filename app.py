@@ -14,20 +14,23 @@ def load_data(path):
 
 
 # PLOT DATA
-def plot_data(data, num_electrodes=128):
+def plot_data(data):
     # take only 2-dimensional array and create pandas DataFrame from data:
     df = pd.DataFrame(data[0])
-    print(df.shape)
-    df = pd.DataFrame(df)
 
-    # create a 3D scatter plot with one trace per line
+    # create a 3D scatter plot with one trace per electrode
     fig = go.Figure()
     for i in range(128):
-        fig.add_trace(go.Scatter3d(x=[i]*num_electrodes, y=list(range(num_electrodes)), z=df.iloc[i][:num_electrodes], mode="lines"))
+        fig.add_trace(go.Scatter3d(x=[i] * 256, y=list(range(256)), z=df.iloc[i], mode="lines"))
 
     # customize the layout of the 3D plot
-    fig.update_layout(scene=dict(xaxis_title="Sample", yaxis_title="Electrode", zaxis_title="Amplitude"))
-
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title="Electrode", range=[0, 128]),
+            yaxis=dict(title="Sample", range=[0, 256]),
+            zaxis=dict(title="Amplitude", range=[df.min().min(), df.max().max()])
+        )
+    )
     # display the 3D plot using streamlit
     st.plotly_chart(fig)
 
