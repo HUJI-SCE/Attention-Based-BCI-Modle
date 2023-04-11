@@ -1,4 +1,4 @@
 import pandas as pd
 
-df = pd.read_pickle('clipeeg.pickle')
-print(df['clipeeg'].shape)
+df = pd.read_pickle('clip_eeg.pickle')
+print(df.shape)
