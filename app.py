@@ -52,12 +52,7 @@ def plot_sample(data_file_path):
 
 
 # DEFAULT DATA
-import os
-
-cwd = os.getcwd()
-print(cwd)
-exit(0)
-default_data_path = 'file.txt'  # CHANGE TO PATH OF DEFAULT PICKLE FILE
+default_data_path = 'clip_eeg.pickle'  # CHANGE TO PATH OF DEFAULT PICKLE FILE
 
 default_data = load_data(default_data_path)
 plot_data(default_data)
