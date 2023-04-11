@@ -1,25 +1,37 @@
 from pathlib import Path
 import streamlit as st
-
-import matplotlib.pyplot as plt
+import os
+import plotly.express as px
+import plotly.graph_objs as go
 import pickle
-
+import pandas as pd
 
 # LOAD DATA
-
 def load_data(path):
     with open(path, 'rb') as f:
-        data = pickle.load(f)
+        data = pd.read_pickle(f)
     return data
 
 
 # PLOT DATA
+def plot_data(data, num_electrodes=128):
+    # extract the data and transpose it back to original dimensions:
+    data = data['clipeeg'].transpose()
+    # take only 2-dimensional array and create pandas DataFrame from data:
+    df = pd.DataFrame(data[0])
+    print(df.shape)
+    df = pd.DataFrame(df)
 
-def plot_data(data):
-    fig, ax = plt.subplots()
-    ax.plot(data)
-    st.pyplot(fig)
+    # create a 3D scatter plot with one trace per line
+    fig = go.Figure()
+    for i in range(128):
+        fig.add_trace(go.Scatter3d(x=[i]*num_electrodes, y=list(range(num_electrodes)), z=df.iloc[i][:num_electrodes], mode="lines"))
 
+    # customize the layout of the 3D plot
+    fig.update_layout(scene=dict(xaxis_title="Line", yaxis_title="Electrode", zaxis_title="Amplitude"))
+
+    # display the 3D plot using streamlit
+    st.plotly_chart(fig)
 
 # ALL SAMPLES CHART
 
@@ -50,9 +62,10 @@ def plot_sample(data_file_path):
     """
     pass
 
-
 # DEFAULT DATA
-default_data_path = 'clip_eeg.pickle'  # CHANGE TO PATH OF DEFAULT PICKLE FILE
+# Construct the path to the input directory and the pickle file
+input_dir = os.path.join(os.getcwd(), 'input')
+default_data_path = os.path.join(input_dir, 'clip_eeg.pickle')
 
 default_data = load_data(default_data_path)
 plot_data(default_data)
