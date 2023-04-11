@@ -1,6 +1,5 @@
 import pandas as pd
 import torch
-import matplotlib.pyplot as plt
 import plotly.express as px
 
 
@@ -61,4 +60,4 @@ def visualize_similarity(index):
         ],
     )
 
-    fig.show()
+    return fig

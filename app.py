@@ -1,4 +1,5 @@
 from pathlib import Path
+from analysis import visualize_similarity
 import streamlit as st
 import os
 import plotly.express as px
@@ -71,7 +72,8 @@ input_dir = os.path.join(os.getcwd(), 'input')
 default_data_path = os.path.join(input_dir, 'clip_eeg.pickle')
 
 default_data = load_data(default_data_path)
-plot_data(default_data, 64, 70)
+st.plotly_chart(visualize_similarity(10))
+plot_data(default_data, 0, 128)
 
 # FILE UPLOADER
 uploaded_files = st.sidebar.file_uploader("Choose a pickle file", type='pickle', accept_multiple_files=True)
@@ -85,7 +87,7 @@ if uploaded_files:
 
         data = load_data(uploaded_file)
 
-        plot_data(data,0,128)
+        plot_data(data, 0, 128)
 
         file_stem = Path(uploaded_file.name).stem
         data_file_path = file_stem + '.pickle'
