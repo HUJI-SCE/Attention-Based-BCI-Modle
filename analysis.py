@@ -1,4 +1,10 @@
+import pandas as pd
 import torch
+import matplotlib.pyplot as plt
+
+
+def calculate_similarity(vec_1, vec_2):
+    return torch.mm(vec_1, vec_2)
 
 
 def calculate_similarity_tensor(data):
@@ -8,20 +14,35 @@ def calculate_similarity_tensor(data):
 
     # loop over each sample in the data tensor
     for i in range(80):
-        # extract the subset of 128 vectors for the current sample
         vectors = torch_data[i]
-
-        # flatten the vectors tensor to size 128x256
         flat_vectors = vectors.view(128, -1)
-
-        # calculate the dot product similarity matrix for the current sample
         similarity_matrix = torch.mm(flat_vectors, flat_vectors.t())
-
-        # store the similarity matrix in the output tensor
         similarity_matrices[i] = similarity_matrix
 
     for i in range(80):
-        min_val = torch.min(similarity_matrices[0])
-        max_val = torch.max(similarity_matrices[0])
-        similarity_matrices[0] = (similarity_matrices[0] - min_val) / (max_val - min_val)
-    print(similarity_matrices[0])
+        min_val = torch.min(similarity_matrices[i])
+        max_val = torch.max(similarity_matrices[i])
+        similarity_matrices[i] = (similarity_matrices[i] - min_val) / (max_val - min_val)
+    return similarity_matrices
+
+
+def visualize_similarity(index):
+    heatmap = calculate_similarity_tensor(pd.read_pickle('input/clip_eeg.pickle'))[index]
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(heatmap, cmap='viridis')
+
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel('Values', rotation=-90, va="bottom")
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(heatmap)
+
+    # get mean and variance values
+    mean_value = heatmap.mean().item()
+    variance_value = heatmap.var().item()
+
+    ax.annotate("Mean Value: {:.2f}".format(mean_value), xy=(0.5, -0.1), xycoords="axes fraction", ha="center")
+    ax.annotate("Variance: {:.2f}".format(variance_value), xy=(0.5, -0.15), xycoords="axes fraction", ha="center")
+
+    plt.show()
