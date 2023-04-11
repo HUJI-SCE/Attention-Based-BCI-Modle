@@ -15,8 +15,6 @@ def load_data(path):
 
 # PLOT DATA
 def plot_data(data, num_electrodes=128):
-    # extract the data and transpose it back to original dimensions:
-    data = data['clipeeg'].transpose()
     # take only 2-dimensional array and create pandas DataFrame from data:
     df = pd.DataFrame(data[0])
     print(df.shape)
@@ -28,7 +26,7 @@ def plot_data(data, num_electrodes=128):
         fig.add_trace(go.Scatter3d(x=[i]*num_electrodes, y=list(range(num_electrodes)), z=df.iloc[i][:num_electrodes], mode="lines"))
 
     # customize the layout of the 3D plot
-    fig.update_layout(scene=dict(xaxis_title="Line", yaxis_title="Electrode", zaxis_title="Amplitude"))
+    fig.update_layout(scene=dict(xaxis_title="Sample", yaxis_title="Electrode", zaxis_title="Amplitude"))
 
     # display the 3D plot using streamlit
     st.plotly_chart(fig)
