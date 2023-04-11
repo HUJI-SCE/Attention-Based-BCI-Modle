@@ -1,6 +1,8 @@
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
+import plotly.express as px
+
 
 
 def calculate_similarity(vec_1, vec_2):
@@ -29,20 +31,34 @@ def calculate_similarity_tensor(data):
 def visualize_similarity(index):
     heatmap = calculate_similarity_tensor(pd.read_pickle('input/clip_eeg.pickle'))[index]
 
-    fig, ax = plt.subplots()
-    im = ax.imshow(heatmap, cmap='viridis')
-
-    cbar = ax.figure.colorbar(im, ax=ax)
-    cbar.ax.set_ylabel('Values', rotation=-90, va="bottom")
-
-    fig, ax = plt.subplots()
-    im = ax.imshow(heatmap)
+    fig = px.imshow(heatmap, color_continuous_scale='viridis')
 
     # get mean and variance values
     mean_value = heatmap.mean().item()
     variance_value = heatmap.var().item()
 
-    ax.annotate("Mean Value: {:.2f}".format(mean_value), xy=(0.5, -0.1), xycoords="axes fraction", ha="center")
-    ax.annotate("Variance: {:.2f}".format(variance_value), xy=(0.5, -0.15), xycoords="axes fraction", ha="center")
+    fig.update_layout(
+        coloraxis_colorbar=dict(title='Values'),
+        annotations=[
+            dict(
+                x=0.5,
+                y=-0.1,
+                xref='paper',
+                yref='paper',
+                text="Mean Value: {:.2f}".format(mean_value),
+                showarrow=False,
+                font=dict(size=14),
+            ),
+            dict(
+                x=0.5,
+                y=-0.15,
+                xref='paper',
+                yref='paper',
+                text="Variance: {:.2f}".format(variance_value),
+                showarrow=False,
+                font=dict(size=14),
+            ),
+        ],
+    )
 
-    plt.show()
+    fig.show()
