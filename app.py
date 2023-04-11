@@ -14,13 +14,15 @@ def load_data(path):
 
 
 # PLOT DATA
-def plot_data(data):
+def plot_data(data, electrode_start_idx, electrode_end_idx):
     # take only 2-dimensional array and create pandas DataFrame from data:
     df = pd.DataFrame(data[0])
 
+    num_of_electrodes = electrode_end_idx - electrode_start_idx
+
     # create a 3D scatter plot with one trace per electrode
     fig = go.Figure()
-    for i in range(128):
+    for i in range(electrode_start_idx, electrode_end_idx):
         fig.add_trace(go.Scatter3d(x=[i] * 256, y=list(range(256)), z=df.iloc[i], mode="lines"))
 
     # customize the layout of the 3D plot
@@ -69,7 +71,7 @@ input_dir = os.path.join(os.getcwd(), 'input')
 default_data_path = os.path.join(input_dir, 'clip_eeg.pickle')
 
 default_data = load_data(default_data_path)
-plot_data(default_data)
+plot_data(default_data, 64, 70)
 
 # FILE UPLOADER
 uploaded_files = st.sidebar.file_uploader("Choose a pickle file", type='pickle', accept_multiple_files=True)
@@ -83,7 +85,7 @@ if uploaded_files:
 
         data = load_data(uploaded_file)
 
-        plot_data(data)
+        plot_data(data,0,128)
 
         file_stem = Path(uploaded_file.name).stem
         data_file_path = file_stem + '.pickle'
