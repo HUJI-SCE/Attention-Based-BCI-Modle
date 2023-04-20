@@ -2,10 +2,10 @@ from pathlib import Path
 from analysis import visualize_similarity
 import streamlit as st
 import os
-import plotly.express as px
 import plotly.graph_objs as go
-import pickle
 import pandas as pd
+
+#TODO: import mne and use it to graph the Electrodes on a human head (there is such a function in mne)
 
 # LOAD DATA
 def load_data(path):
@@ -22,16 +22,16 @@ def plot_data(data, electrode_start_idx, electrode_end_idx):
     num_of_electrodes = electrode_end_idx - electrode_start_idx
 
     # create a 3D scatter plot with one trace per electrode
-    fig = go.Figure()
+    fig = go.Figure(layout=dict(width=1000, height=600))
     for i in range(electrode_start_idx, electrode_end_idx):
         fig.add_trace(go.Scatter3d(x=[i] * 256, y=list(range(256)), z=df.iloc[i], mode="lines"))
 
     # customize the layout of the 3D plot
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title="Electrode", range=[0, 128]),
-            yaxis=dict(title="Sample", range=[0, 256]),
-            zaxis=dict(title="Amplitude", range=[df.min().min(), df.max().max()])
+            xaxis=dict(title="Electrode", range=[0, 128], title_font=dict(size=20), tickfont=dict(size=12)),
+            yaxis=dict(title="Sample", range=[0, 256], title_font=dict(size=20), tickfont=dict(size=12)),
+            zaxis=dict(title="Amplitude", range=[df.min().min(), df.max().max()], title_font=dict(size=12), tickfont=dict(size=14))
         )
     )
     # display the 3D plot using streamlit
