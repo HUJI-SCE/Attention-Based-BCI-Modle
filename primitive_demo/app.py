@@ -67,8 +67,8 @@ def plot_sample(data_file_path):
     pass
 
 # DEFAULT DATA
-# Construct the path to the input directory and the pickle file
-input_dir = os.path.join(os.getcwd(), 'input')
+# Construct the path to the data directory and the pickle file
+input_dir = os.path.join(os.getcwd(), '../neural_net_demo/data')
 default_data_path = os.path.join(input_dir, 'clip_eeg.pickle')
 
 default_data = load_data(default_data_path)

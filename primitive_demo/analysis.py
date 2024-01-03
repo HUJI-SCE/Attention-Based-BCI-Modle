@@ -28,7 +28,7 @@ def calculate_similarity_tensor(data):
 
 
 def visualize_similarity(index):
-    heatmap = calculate_similarity_tensor(pd.read_pickle('input/clip_eeg.pickle'))[index]
+    heatmap = calculate_similarity_tensor(pd.read_pickle('pickle/clip_eeg.pickle'))[index]
 
     fig = px.imshow(heatmap, color_continuous_scale='viridis')
 

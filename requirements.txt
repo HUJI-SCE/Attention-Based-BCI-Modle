@@ -1,4 +1,7 @@
-streamlit==1.21.0
+streamlit~=1.22.0
 matplotlib==3.7.1
-pandas~=1.5.3
+pandas~=2.0.1
 plotly~=5.14.1
+mne~=1.6.0
+scipy~=1.11.4
+torch~=2.0.0
