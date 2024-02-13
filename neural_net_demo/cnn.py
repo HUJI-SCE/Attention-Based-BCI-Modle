@@ -2,6 +2,13 @@ import torch
 import torch.nn as nn
 import torch.autograd.profiler as profiler
 
+import mne
+
+import pickle
+
+# imported local files from project
+from preprocess import preprocess
+
 
 class MyModel(nn.Module):
     def __init__(self, topology_metadata=None):
@@ -40,41 +47,43 @@ class MyModel(nn.Module):
 
         # decomposition of the metadata variables in topology
         if topology_metadata is None:
-            topology_metadata = [(143, 77), (10, 5, 32)]
+            topology_metadata = [(144, 77), (10, 1, 64)]
 
         channel_count, batch_width = topology_metadata[0]
         kernel_width, kernel_stride, fc_segment_length = topology_metadata[1]
 
-        # Fully connected layer for each channel
+        # list of linear transformations for the segments in the 1st layer.
         self.fc_layers = nn.ModuleList([nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
 
-        # Custom Convolutional Segment
+        # a single transformation for the second part of the 1st layer
         self.conv_segment = CustomConvSegment(channel_count, batch_width, kernel_stride)
 
-        # Concatenation layer
-        self.concat_layer = nn.Linear(channel_count + (batch_width - kernel_width + 1), 128)
+        # 2nd layer
+        self.fast_reduction_layer = nn.Linear(channel_count * fc_segment_length + (batch_width - kernel_width + 1), 128)
 
-        # Fully connected layers
-        self.fc1 = nn.Linear(128, 1)  # 1 output node for binary classification
+        # 3rd layer
+        self.reduction_to_output_layer = nn.Linear(128, 1)
 
-        # Sigmoid activation for binary classification
+        # activation function embedded in all layers
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         # Fully connected layers for each channel
-        fc_outputs = [fc(x[:, i, :]) for i, fc in enumerate(self.fc_layers)]
+        # list of applying the random Linear transformations on each electrode (list of segments [exciting!])
+        fc_outputs = [fc(x[i, :]) for i, fc in enumerate(self.fc_layers)]
 
-        # Convolutional segment
+        # Convolutional segment (odd one out lol)
         conv_output = self.conv_segment(x)
 
-        # Concatenate fully connected outputs and convolutional output
+        # merge the segments (fully connected from the electrodes),
+        # with the convolutional segment to create the first layer.
         concatenated = torch.cat(fc_outputs + [conv_output], dim=1)
 
-        # Apply concatenation layer
-        concatenated = nn.functional.relu(self.concat_layer(concatenated))
+        # forward to 2nd layer (from concatenated layer)
+        second_layer = nn.functional.relu(self.fast_reduction_layer(concatenated))
 
-        # Apply fully connected layer with ReLU activation
-        x = nn.functional.relu(self.fc1(concatenated))
+        # forward to 3rd (and output) layer (from 2nd layer)
+        x = nn.functional.relu(self.reduction_to_output_layer(second_layer))
 
         # Apply sigmoid activation for binary classification
         x = self.sigmoid(x)
@@ -83,10 +92,10 @@ class MyModel(nn.Module):
 
 
 class CustomConvSegment(nn.Module):
-    def __init__(self, channel_count, batch_width, kernel_stride):
+    def __init__(self, channel_count, kernel_width, kernel_stride):
         super(CustomConvSegment, self).__init__()
 
-        self.conv_layer = nn.Conv2d(1, 1, kernel_size=(channel_count, batch_width), stride=kernel_stride)
+        self.conv_layer = nn.Conv2d(1, 1, kernel_size=(channel_count, kernel_width), stride=kernel_stride)
 
     def forward(self, x):
         # Expand dimensions for the single-channel convolution
@@ -103,18 +112,24 @@ class CustomConvSegment(nn.Module):
 
 # Set up input data
 total_samples = 3_072_000
-electrode_count = 128
-kernel_count = 10
-samples_per_batch = 150
-input_data = torch.randn((total_samples - samples_per_batch, electrode_count, 1, samples_per_batch))
+electrode_count = 144
+kernel_width = 10
+samples_per_batch = 77
+raw = mne.io.read_raw_fif('raw_complete.fif', preload=True)
+
+# unpickle data
+with open('numpy_data.pickle', 'rb') as raw_pickle:
+    data_set = pickle.load(raw_pickle)
+
+batches = preprocess(data_set)
 
 # Instantiate your model
-model = MyModel(electrode_count, kernel_count, (1, samples_per_batch))
+model = MyModel(electrode_count, kernel_width, (1, samples_per_batch))
 
 # Run the forward pass with profiling
 with profiler.profile(record_shapes=True, use_cuda=False) as prof:
     with profiler.record_function("forward_pass"):
-        output = model(input_data)
+        output = model(data_set)
 
 # Print the profiling results
 print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))

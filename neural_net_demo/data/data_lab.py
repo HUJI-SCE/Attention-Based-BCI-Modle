@@ -1,4 +1,6 @@
 import mne
+import numpy as np
+import pickle
 
 '''
 This function let's you view the data in an interactive window,
@@ -27,14 +29,20 @@ Status - this channel records key presses.
 
 def view_data():
     raw = mne.io.read_raw_fif('raw_complete.fif', preload=True)
+    with open('numpy_data.pickle', 'wb') as numpy_file:
+        pickle.dump(raw[:][0], numpy_file)
 
+    with open('numpy_data.pickle', 'rb') as numpy_file:
+        un_pickled_data = pickle.load(numpy_file)
+
+    print("")
     # Select the stimulus channel(s) based on channel names or indices
     # Replace with the actual name or index of your stimulus channel
-    stimulus_channel_list = ['Status']
+    # stimulus_channel_list = ['Status']
 
     # Plot the data from the selected channel(s)
     # raw.pick(stimulus_channel_list).plot(block=True)
-    print(sorted(raw['Status'])[-1:-10:-1])
+    # print(sorted(raw['Status'])[-1:-10:-1])
 
 
 if __name__ == '__main__':

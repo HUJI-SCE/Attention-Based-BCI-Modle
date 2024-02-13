@@ -2,23 +2,13 @@ import numpy as np
 from typing import Tuple
 
 
-def calculate_status(status_window: np.array) -> bool:
+def calculate_solution(status_window: np.ndarray) -> bool:
     """
-    This function converts the status window into a boolean which represents whether a button
-    is currently (for this batch) being pressed by the user or not.
-    The function will return the state of the last recording.
 
-    TODO: This function may be more complicated in the future
-
-    status_window: The array of recordings of the button state either being pressed or not.
-                   If the button is pressed the value is int-max otherwise it is 0.
-    return: A boolean representing whether the button is currently (for this batch),
-            pressed by the user or not.
     """
-    return status_window[-1] == 6.5536e+04
 
 
-def preprocess(raw, window_interval: float = 0.15, frequency: int = 512, cutoff_index: int = 3_008_700)\
+def preprocess(raw: np.ndarray, window_interval: float = 0.15, frequency: int = 512, cutoff_index: int = 3_008_700)\
         -> Tuple[Tuple[np.array, bool], Tuple[np.array, bool], Tuple[np.array, bool]]:
     """
     This function applies a series of transformations to the raw data, from the .fif file (retrieved with mne),
@@ -46,9 +36,12 @@ def preprocess(raw, window_interval: float = 0.15, frequency: int = 512, cutoff_
     # divide into training set, test set, and validation set, with the following ratios: 60%-20%-20%
     training_set, test_set, validation_set = np.split(data_set, train_test_validate_ratios)
 
+    # divide solution set into training solution, test_solution, and validation_solution
+    training_solution, test_solution, validation_solution = np.split(solution_set, train_test_validate_ratios)
+
     # convert status channel to boolean
-    training_set = training_set[:-1], calculate_status(training_set[-1])
-    test_set = test_set[:-1], calculate_status(test_set[-1])
-    validation_set = validation_set[:-1], calculate_status(validation_set[-1])
+    training_set = training_set[:-1], calculate_solution(training_solution)
+    test_set = test_set[:-1], calculate_solution(test_solution)
+    validation_set = validation_set[:-1], calculate_solution(validation_solution)
 
     return training_set, test_set, validation_set
