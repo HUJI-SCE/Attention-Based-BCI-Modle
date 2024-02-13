@@ -39,9 +39,10 @@ def preprocess(raw: np.ndarray, window_interval: float = 0.15, frequency: int = 
     # divide solution set into training solution, test_solution, and validation_solution
     training_solution, test_solution, validation_solution = np.split(solution_set, train_test_validate_ratios)
 
+    # rmagal: temporary commented because we still need to get solution set
     # convert status channel to boolean
-    training_set = training_set[:-1], calculate_solution(training_solution)
-    test_set = test_set[:-1], calculate_solution(test_solution)
-    validation_set = validation_set[:-1], calculate_solution(validation_solution)
+    #training_set = training_set[:-1], calculate_solution(training_solution)
+    #test_set = test_set[:-1], calculate_solution(test_solution)
+    #validation_set = validation_set[:-1], calculate_solution(validation_solution)
 
     return training_set, test_set, validation_set
