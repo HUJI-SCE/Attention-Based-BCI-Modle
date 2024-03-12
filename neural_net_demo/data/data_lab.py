@@ -38,11 +38,10 @@ def view_data():
     print("")
     # Select the stimulus channel(s) based on channel names or indices
     # Replace with the actual name or index of your stimulus channel
-    # stimulus_channel_list = ['Status']
+    stimulus_channel_list = ['A1']
 
     # Plot the data from the selected channel(s)
-    # raw.pick(stimulus_channel_list).plot(block=True)
-    # print(sorted(raw['Status'])[-1:-10:-1])
+    raw.pick(stimulus_channel_list).plot(block=True)
 
 
 if __name__ == '__main__':

@@ -9,7 +9,6 @@ import pickle
 # imported local files from project
 from preprocess import preprocess
 
-
 class MyModel(nn.Module):
     def __init__(self, topology_metadata=None):
         """
