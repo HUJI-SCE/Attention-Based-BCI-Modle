@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.autograd.profiler as profiler
+from preprocess import *
 
 import mne
 
 import pickle
 
 # imported local files from project
-from preprocess import preprocess
+from neural_net_demo.preprocess import preprocess_to_pickle
+
 
 class MyModel(nn.Module):
     def __init__(self, topology_metadata=None):
@@ -61,7 +63,7 @@ class MyModel(nn.Module):
         self.fast_reduction_layer = nn.Linear(channel_count * fc_segment_length + (batch_width - kernel_width + 1), 128)
 
         # 3rd layer
-        self.reduction_to_output_layer = nn.Linear(128, 1)
+        self.reduction_to_output_layer = nn.Linear(128, 6)
 
         # activation function embedded in all layers
         self.sigmoid = nn.Sigmoid()
@@ -109,26 +111,33 @@ class CustomConvSegment(nn.Module):
         return x
 
 
-# Set up input data
-total_samples = 3_072_000
-electrode_count = 144
-kernel_width = 10
-samples_per_batch = 77
-raw = mne.io.read_raw_fif('raw_complete.fif', preload=True)
-
-# unpickle data
-with open('numpy_data.pickle', 'rb') as raw_pickle:
-    data_set = pickle.load(raw_pickle)
-
-batches = preprocess(data_set)
-
-# Instantiate your model
-model = MyModel(electrode_count, kernel_width, (1, samples_per_batch))
-
-# Run the forward pass with profiling
-with profiler.profile(record_shapes=True, use_cuda=False) as prof:
-    with profiler.record_function("forward_pass"):
-        output = model(data_set)
-
-# Print the profiling results
-print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
+from preprocess import *
+if __name__ == '__main__':
+    # Set up input data
+    # total_samples = 3_072_000
+    # electrode_count = 144
+    # kernel_width = 10
+    # samples_per_batch = 77
+    # raw = mne.io.read_raw_fif('raw_complete.fif', preload=True)
+    #
+    # # unpickle data
+    # with open('zur_BIGVZD_numpy.pickle', 'rb') as raw_pickle:
+    #     data_set = pickle.load(raw_pickle)
+    #
+    # batches = preprocess_to_pickle(data_set)
+    #
+    # # Instantiate your model
+    # model = MyModel(electrode_count, kernel_width, (1, samples_per_batch))
+    #
+    # # Run the forward pass with profiling
+    # with profiler.profile(record_shapes=True, use_cuda=False) as prof:
+    #     with profiler.record_function("forward_pass"):
+    #         output = model(data_set)
+    #
+    # # Print the profiling results
+    # print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
+    format_dictionary = {
+                        'data set key path': ['\'o\'', '0', '0', '5'],
+                        'solution set key path': ['\'o\'', '0', '0', '4']
+    }
+    matlab_to_numpy('matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat', format_dictionary)

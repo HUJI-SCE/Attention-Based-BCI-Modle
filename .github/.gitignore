@@ -124,7 +124,7 @@ celerybeat.pid
 .env
 .venv
 env/
-venv/
+../venv/
 ENV/
 env.bak/
 venv.bak/
@@ -200,6 +200,6 @@ primitive_demo/pickle/clip_eeg.pickle
 #directories created by pycharm
 .devcontainer
 .github
-.vs
+primitive_demo/.vs
 
 testinggitignore
