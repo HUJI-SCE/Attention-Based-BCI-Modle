@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.autograd.profiler as profiler
-
 import mne
-
 import pickle
 
 # imported local files from project
@@ -45,24 +43,31 @@ class MyModel(nn.Module):
 
         super(MyModel, self).__init__()
 
-        # decomposition of the metadata variables in topology
         if topology_metadata is None:
             topology_metadata = [(144, 77), (10, 1, 64)]
 
+        # decomposition of the metadata variables in topology
         channel_count, batch_width = topology_metadata[0]
         kernel_width, kernel_stride, fc_segment_length = topology_metadata[1]
 
-        # list of linear transformations for the segments in the 1st layer.
-        self.fc_layers = nn.ModuleList([nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
+        second_layer_out_channels   = 128
+        third_layer_out_channels    = 1
 
+        # list of linear transformations for the segments in the 1st layer.
+        self.fc_layers = nn.ModuleList(
+            [nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
+
+        # We have a kernel, Matrix[144][10]. We convolute this with the Batch (Matrix[144][77])
+        # We run this Matrix right\left over the batch (thus 67 output_channels in the end because stride is 1)
         # a single transformation for the second part of the 1st layer
-        self.conv_segment = CustomConvSegment(channel_count, batch_width, kernel_stride)
+        self.conv_segment = CustomConvSegment(channel_count, kernel_width, kernel_stride)
 
         # 2nd layer
-        self.fast_reduction_layer = nn.Linear(channel_count * fc_segment_length + (batch_width - kernel_width + 1), 128)
-
+        self.fast_reduction_layer = nn.Linear(channel_count * fc_segment_length +
+                                              (batch_width - kernel_width + 1),
+                                              second_layer_out_channels)
         # 3rd layer
-        self.reduction_to_output_layer = nn.Linear(128, 1)
+        self.reduction_to_output_layer = nn.Linear(second_layer_out_channels, third_layer_out_channels)
 
         # activation function embedded in all layers
         self.sigmoid = nn.Sigmoid()
@@ -71,16 +76,18 @@ class MyModel(nn.Module):
         # Fully connected layers for each channel
         # list of applying the random Linear transformations on each electrode (list of segments [exciting!])
         fc_outputs = [fc(x[i, :]) for i, fc in enumerate(self.fc_layers)]
+        # convert to Tensor and not List of Tensors:
+        fc_outputs = torch.cat(fc_outputs)
 
         # Convolutional segment (odd one out lol)
         conv_output = self.conv_segment(x)
 
         # merge the segments (fully connected from the electrodes),
         # with the convolutional segment to create the first layer.
-        concatenated = torch.cat(fc_outputs + [conv_output], dim=1)
-
+        concatenated = torch.cat((fc_outputs, conv_output))
         # forward to 2nd layer (from concatenated layer)
         second_layer = nn.functional.relu(self.fast_reduction_layer(concatenated))
+            #concatenated))
 
         # forward to 3rd (and output) layer (from 2nd layer)
         x = nn.functional.relu(self.reduction_to_output_layer(second_layer))
@@ -94,38 +101,44 @@ class MyModel(nn.Module):
 class CustomConvSegment(nn.Module):
     def __init__(self, channel_count, kernel_width, kernel_stride):
         super(CustomConvSegment, self).__init__()
-
-        self.conv_layer = nn.Conv2d(1, 1, kernel_size=(channel_count, kernel_width), stride=kernel_stride)
+        self.conv_layer = nn.Conv2d(in_channels =1,
+                                    out_channels=1,
+                                    kernel_size=(channel_count, kernel_width),
+                                    stride=kernel_stride)
 
     def forward(self, x):
-        # Expand dimensions for the single-channel convolution
-        x = x.unsqueeze(1)
-
+        # Expand dimensions for the single-channel convolution, adds two dimensions, e.g: [1][1]...
+        x = x.unsqueeze(0).unsqueeze(0)
         # Apply the custom convolutional layer
         x = self.conv_layer(x)
-
         # Flatten the output
-        x = x.view(x.size(0), -1)
-
+        x = x.view(-1)
         return x
 
 
 # Set up input data
-total_samples = 3_072_000
-electrode_count = 144
-kernel_width = 10
-samples_per_batch = 77
-raw = mne.io.read_raw_fif('raw_complete.fif', preload=True)
+total_samples       = 3_072_000
+electrode_count     = 144
+samples_per_batch   = 77
+kernel_width        = 10
+kernel_stride       = 1
+fc_segment_length   = 64
 
+
+#raw = mne.io.read_raw_fif('raw_complete.fif', preload=True)
 # unpickle data
-with open('numpy_data.pickle', 'rb') as raw_pickle:
-    data_set = pickle.load(raw_pickle)
+#with open('numpy_data.pickle', 'rb') as raw_pickle:
+#    data_set = pickle.load(raw_pickle)
+#batches = preprocess(data_set)
 
-batches = preprocess(data_set)
 
+data_set = torch.randn(electrode_count, samples_per_batch) #temp random data
 # Instantiate your model
-model = MyModel(electrode_count, kernel_width, (1, samples_per_batch))
+model = MyModel(topology_metadata=[(electrode_count, samples_per_batch),
+                                   (kernel_width,  kernel_stride, fc_segment_length)])
 
+print(data_set)
+print(model)
 # Run the forward pass with profiling
 with profiler.profile(record_shapes=True, use_cuda=False) as prof:
     with profiler.record_function("forward_pass"):
