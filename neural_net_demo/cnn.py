@@ -1,27 +1,14 @@
 import os
-from datetime import date
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.autograd.profiler as profiler
-import mne
-import pickle
-import scipy
 import torch.optim as optim
 
 # imported local files from project
-from preprocess import preprocess
+from preprocess import *
+from state_model_index import StateModelIndex
 
-# More or less => ssh -l loi201loi phoenix.cs.huji.ac.il
-# nqouta    usage of disk space
-# ssinfo    jobs that are running now
-# ssqueue   queues of these jobs
-# susage    Recap per user jobs that are running now
-
-# starting new sessions that won't close upon disconnection:
-# tmux to start a new session
-# tmux -a to open existing session
 
 # Set up input data
 total_samples = 3_072_000
@@ -31,10 +18,12 @@ kernel_width = 10
 kernel_stride = 1
 fc_segment_length = 64
 
-temp_data_set = torch.randn(electrode_count, samples_per_batch)  # temp random data
-data_labels = torch.from_numpy(np.random.choice([0, 1], size=(1,), p=[1. / 3, 2. / 3])).type(torch.FloatTensor)
+model_dir = 'model_states'
+
+# temp_data_set = torch.randn(electrode_count, samples_per_batch)  # temp random data
+# data_labels = torch.from_numpy(np.random.choice([0, 1], size=(1,), p=[1. / 3, 2. / 3])).type(torch.FloatTensor)
 # [expression for item in iterable if condition == True]
-temp_many_data_sets =  [torch.randn(electrode_count, samples_per_batch) for i in range(10)]
+# temp_many_data_sets = [torch.randn(electrode_count, samples_per_batch) for i in range(10)]
 
 
 class MyModel(nn.Module):
@@ -73,27 +62,27 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
         if topology_metadata is None:
-            topology_metadata = [(144, 77), (10, 1, 64)]
+            topology_metadata = [(144, 77), (10, 1, 64), (128, 1)]
 
         # decomposition of the metadata variables in topology
         channel_count, batch_width = topology_metadata[0]
         kernel_width, kernel_stride, fc_segment_length = topology_metadata[1]
-
-        second_layer_out_channels = 128
-        third_layer_out_channels = 1
+        second_layer_out_channels, third_layer_out_channels = topology_metadata[2]
 
         # list of linear transformations for the segments in the 1st layer.
         self.fc_layers = nn.ModuleList(
             [nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
 
-        # We have a kernel, Matrix[144][10]. We convolute this with the Batch (Matrix[144][77])
+        # We have a kernel, Matrix[144][10]. We convolve this with the Batch (Matrix[144][77])
         # We run this Matrix right\left over the batch (thus 67 output_channels in the end because stride is 1)
         # a single transformation for the second part of the 1st layer
         self.conv_segment = CustomConvSegment(channel_count, kernel_width, kernel_stride)
 
-        # 2nd layer
-        self.fast_reduction_layer = nn.Linear(channel_count * fc_segment_length +
-                                              (batch_width - kernel_width + 1),
+        # 2nd layer: segment_2a/2b (see documentation).
+        segment_2a_length = (batch_width - kernel_width + 1)
+        segment_2b_length = channel_count * fc_segment_length
+
+        self.fast_reduction_layer = nn.Linear(segment_2b_length + segment_2b_length,
                                               second_layer_out_channels)
         # 3rd layer
         self.reduction_to_output_layer = nn.Linear(second_layer_out_channels, third_layer_out_channels)
@@ -145,13 +134,12 @@ class CustomConvSegment(nn.Module):
         return x
 
 
-# First run preproccess.py (as main) to create updated pickle files from kayas data
-# Call a function from preproccess to Load the pickle data, it returns numpy array.
+# First run preprocess.py (as main) to create updated pickle files from kayas data
+# Call a function from preprocess to Load the pickle data, it returns numpy array.
 
 def create_model():
     # Instantiate your model
-    model = MyModel(topology_metadata=[(electrode_count, samples_per_batch),
-                                       (kernel_width, kernel_stride, fc_segment_length)])
+    model = MyModel()
     return model
 
 
@@ -165,6 +153,7 @@ def profile_model(model, data_set):
     # Print the profiling results
     print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
 
+
 def timestamp():
     from datetime import datetime
     # datetime object containing current date and time
@@ -174,76 +163,96 @@ def timestamp():
     return dt_string
 
 
-def save_model(model):
-    model_dir = os.getcwd()
-    model_path = os.path.join(model_dir, "model" + ".pth")
+def save_model(model: MyModel, shuffle: np.ndarray, loss, state_model_index=0):
+    """
+    This function stores the model state (all current weights and biases) in an indexed file,
+    after training on a mini-batch (an ordered list of input vectors,
+    which induce a series of forward passes).
+
+    It also stores the shuffle of the mini-batch - the order of the input vectors in the mini-batch.
+    This is the order in which the input vectors, that are originally ordered sequentially
+    with respect to the recording (of the EEG), should be fed into the network (This value
+    is randomly generated).
+
+    todo: determine whether the shuffle should be generated at this stage, or at another stage
+        and implement.
+
+    :param: model - the current state of the model, as a pytorch network object.
+    :param: shuffle - the order in which the input vectors.
+    :param: the training loss of the model
+    :state_index: the model_state_index (see StateModelIndex documentation)
+    """
+
+    # save model state in suitable file
+    os.system(os.path.join(model_dir, f'model_{state_model_index}'))
+    model_path = os.path.join(model_dir, 'model.pth')
     torch.save(model, model_path)
 
+    # document the shuffle
+    with open(os.path.join(model_dir, 'shuffle.pickle'), 'wb') as file:
+        pickle.dump(shuffle, file)
 
-def train_model(model, data_set):
+    # document the details: timestamp, loss...(TBD)
+    with open(os.path.join(model_dir, 'details.txt'), 'w') as file:
+        file.write(f'{timestamp()}\n')
+        file.write(f'training loss: {loss}')
+
+
+def train_model(model, data, label, shuffle, state_model_index):
     """First we are moving our data to GPU and then removing any gradient
-     so that it doesn’t effect our training.
-      Next we are making a forward pass and obtain the outputs.
-      Next we pass these output along with correct label to obtain our loss
-       and then call backward() to calculate gradients.
-        Then we call step() to update the weights. And add the loss to train_loss."""
+     so that it doesn't affect our training.
+     Next we are making a forward pass and obtain the outputs.
+     Next we pass these output along with correct label to obtain our loss
+     and then call backward() to calculate gradients.
+     Then we call step() to update the weights. And add the loss to train_loss."""
 
+    # init gpu (if one exists)
     is_gpu = torch.cuda.is_available()
-    is_gpu = False
+    if is_gpu:
+        data, label = data.cuda(), label.cuda()
 
+    # init training process parameters
     epochs = 5
     criterion = nn.BCELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.7)
+    train_loss = 0.0
 
-    for i in range(1):
-        train_loss = 0.0
-        # for data, label in (temp_many_data_sets, data_labels):
-        for j in range(1):
-            data, label = data_set, data_labels
-            if is_gpu:
-                data, label = data.cuda(), label.cuda()
-            optimizer.zero_grad()
+    # train loop
+    for data_vector, label_vector in zip(data[shuffle], label[shuffle]):
+        optimizer.zero_grad()
 
-            output = model(data)
-            loss = criterion(output, label)
-            loss.backward()
+        output = model(data_vector)
+        loss = criterion(output, label_vector)
+        loss.backward()
 
-            optimizer.step()
+        optimizer.step()
 
-            train_loss += loss.item() * data.size(0)
-        print(f'Epoch: {i + 1} / {epochs} \t\t\t Training Loss:{train_loss / len(data_set)}')
-    save_model(model)
+        train_loss += loss.item() * data.size(0)
+    # print(f'Epoch: {i + 1} / {epochs} \t\t\t Training Loss:{train_loss / len(data_set)}')
+    save_model(model, shuffle, train_loss, state_model_index)
 
 
 def main():
-    # Loading model from path:
-    #model = torch.load(PATH)
+
     model = create_model()
-    train_model(model, temp_data_set)
+
+    # init the model state index to it's last value
+    with StateModelIndex('state_model_index') as state_model_index:
+
+        # Loading model from path (if the path exists)
+        try:
+            model = torch.load(os.path.join(model_dir, f'model_{state_model_index}.pth'))
+
+        # Whether loading succeeded or failed -> start training session
+        finally:
+            # get dataset and shuffle from preprocess module
+            (train_set, test_set, validate_set), \
+                (train_solution, test_solution, validate_solution), \
+                shuffle_train, shuffle_test, shuffle_validate = get_dataset()
+
+            train_model(model, train_set, train_solution, shuffle_train, state_model_index)
     # profile_model(model)
 
 
 if __name__ == '__main__':
     main()
-
-
-
-"""
-This is very well documented on the PyTorch website,
-you definitely won't regret spending a minute or two reading this page. 
-PyTorch essentially defines nine CPU tensor types and nine GPU tensor types:
-
-╔══════════════════════════╦═══════════════════════════════╦════════════════════╦═════════════════════════╗
-║        Data type         ║             dtype             ║     CPU tensor     ║       GPU tensor        ║
-╠══════════════════════════╬═══════════════════════════════╬════════════════════╬═════════════════════════╣
-║ 32-bit floating point    ║ torch.float32 or torch.float  ║ torch.FloatTensor  ║ torch.cuda.FloatTensor  ║
-║ 64-bit floating point    ║ torch.float64 or torch.double ║ torch.DoubleTensor ║ torch.cuda.DoubleTensor ║
-║ 16-bit floating point    ║ torch.float16 or torch.half   ║ torch.HalfTensor   ║ torch.cuda.HalfTensor   ║
-║ 8-bit integer (unsigned) ║ torch.uint8                   ║ torch.ByteTensor   ║ torch.cuda.ByteTensor   ║
-║ 8-bit integer (signed)   ║ torch.int8                    ║ torch.CharTensor   ║ torch.cuda.CharTensor   ║
-║ 16-bit integer (signed)  ║ torch.int16 or torch.short    ║ torch.ShortTensor  ║ torch.cuda.ShortTensor  ║
-║ 32-bit integer (signed)  ║ torch.int32 or torch.int      ║ torch.IntTensor    ║ torch.cuda.IntTensor    ║
-║ 64-bit integer (signed)  ║ torch.int64 or torch.long     ║ torch.LongTensor   ║ torch.cuda.LongTensor   ║
-║ Boolean                  ║ torch.bool                    ║ torch.BoolTensor   ║ torch.cuda.BoolTensor   ║
-╚══════════════════════════╩═══════════════════════════════╩════════════════════╩═════════════════════════╝
-"""

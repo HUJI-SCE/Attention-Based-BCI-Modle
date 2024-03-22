@@ -1,5 +1,6 @@
 import os.path
 import pickle
+
 from scipy.io import loadmat
 import numpy as np
 
@@ -51,9 +52,10 @@ def matlab_to_numpy(path_to_mat_file: str, mat_format, force: bool = False):
     :param: mat_format: the format of the given matlab file
     :param: force: force flag
     """
-    # check if file already exists
+    # parameters
     kayas_path = path_to_pickle + ['kayas_data', 'dataset.pickle']
 
+    # check if file already exists
     if os.path.exists(os.path.join(*kayas_path)) and not force:
         return
 
@@ -76,9 +78,9 @@ def matlab_to_numpy(path_to_mat_file: str, mat_format, force: bool = False):
     store_pickle(data_set.T, kayas_path)
 
 
-def preprocess_to_pickle(raw: np.ndarray, raw_meta_data=None,
-                         window_interval: float = 0.15, frequency: int = 1000,
-                         train_test_val_ratio=None):
+def batch_and_set(raw: np.ndarray, raw_meta_data=None,
+                  window_interval: float = 0.15, frequency: int = 1000,
+                  train_test_val_ratio: np.ndarray =None):
     """
     This function applies a series of transformations to the raw data, from the .fif file (retrieved with mne),
     to appropriate it for the network training.
@@ -99,45 +101,48 @@ def preprocess_to_pickle(raw: np.ndarray, raw_meta_data=None,
     if train_test_val_ratio is None:
         train_test_val_ratio = [0.6, 0.2, 0.2]
 
+    # convert ratio list to a cumulative sum of the fractions
+    for i in range(1, len(train_test_val_ratio)):
+        train_test_val_ratio[i] += train_test_val_ratio[i - 1]
+
     # default value of meta data is 22 - for 22 channels in kaya's dataset
     if raw_meta_data is None:
         raw_meta_data = [22]
     channel_count = raw_meta_data[0]
 
-    # set parameters
     window_size = round(frequency * window_interval)
-    train_test_val_lengths = train_test_val_ratio * raw.shape[1]
-
+    train_test_val_lengths = np.round(np.multiply(train_test_val_ratio, raw.shape[1])).astype(int)
     # build batched training set tensor and match with solution set
     data_set = np.lib.stride_tricks.sliding_window_view(raw, (channel_count, window_size))[0]
-    store_pickle(data_set, path_to_pickle + ['kayas_data', 'batched.pickle'])
 
     # apply train-test-validation ratios to data
-    data_set = np.split(data_set, train_test_val_lengths)
+    data_set = np.split(data_set, train_test_val_lengths[:-1])
 
     # get solution set
     train_set, test_set, validate_set = data_set[:, :, :-1]
     train_solution, test_solution, validate_solution = data_set[:, :, -1]
 
-    # save to pickle
+    return (train_set, test_set, validate_set), (train_solution, test_solution, validate_solution)
 
-    store_pickle(train_set, path_to_pickle + ['kayas_data', 'train_set.pickle'])
-    store_pickle(test_set, path_to_pickle + ['kayas_data', 'test_set.pickle'])
-    store_pickle(validate_set, path_to_pickle + ['kayas_data', 'validate_set.pickle'])
+    # store_pickle(train_set, path_to_pickle + ['kayas_data', 'train_set.pickle'])
+    # store_pickle(test_set, path_to_pickle + ['kayas_data', 'test_set.pickle'])
+    # store_pickle(validate_set, path_to_pickle + ['kayas_data', 'validate_set.pickle'])
+    #
+    # store_pickle(train_solution, path_to_pickle + ['kayas_data', 'train_solution.pickle'])
+    # store_pickle(test_solution, path_to_pickle + ['kayas_data', 'test_solution.pickle'])
+    # store_pickle(validate_solution, path_to_pickle + ['kayas_data', 'validate_solution.pickle'])
 
-    store_pickle(train_solution, path_to_pickle + ['kayas_data', 'train_solution.pickle'])
-    store_pickle(test_solution, path_to_pickle + ['kayas_data', 'test_solution.pickle'])
-    store_pickle(validate_solution, path_to_pickle + ['kayas_data', 'validate_solution.pickle'])
 
+def get_dataset():
+    """
+    This function pre-processes the data form it's original state - in it's matlab format,
+    to its (almost) final state - an ordered numpy array.
 
-if __name__ == '__main__':
-
-    '''Preprocessing for Zur's old Data (deprecated)'''
-    # # get pickle of raw in mne object form
-    # raw_numpy = get_pickle('data/pickled_data/zurs_data/zur_BIGVZD_numpy.pickle')
-    # # mne_raw = mne.io.read_raw_fif('./neural_net_demo/data/raw_complete.fif')
-    # x, y, z = preprocess(raw_numpy)
-    # print('done')
+    The only step left is to shuffle the data.
+    Because the data is way too heavy to carry out this shuffle, a shuffled list of indices
+    is generated, which tells the program at which order to feed the input vectors
+    into the network.
+    """
 
     '''Preprocessing for Kaya's hip Data'''
     format_dictionary = {
@@ -146,4 +151,17 @@ if __name__ == '__main__':
     }
     matlab_to_numpy('matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat', format_dictionary)
     dataset = get_pickle(path_to_pickle + ['kayas_data', 'dataset.pickle'])
-    preprocess_to_pickle(dataset)
+
+    batched_data = batch_and_set(dataset)
+
+    # generate shuffle
+    rng = np.random.default_rng()
+    shuffle = rng.permutation(batched_data[0][0].size), \
+              rng.permutation(batched_data[0][1].size), \
+              rng.permutation(batched_data[0][2].size)
+
+    return batched_data, shuffle
+
+
+if __name__ == '__main__':
+    pass

@@ -1,1 +1,41 @@
-The 'Status' channel has either 0 or a very high value(65)
+Kayas Data:
+    1. Inhomogeneous Shuffling:
+    Problem:
+        The train/test/val sets are shuffled, but not cross-wise - every
+        set is shuffled internally.
+        Additionally, the 3 sets are the 3 chunks of the original data:
+            train = first 60% of the data
+            test = middle 20% of the data
+            val = last 20% of the data
+        If there is a difference between data coming from the beginning/middle/end of the EEG recording,
+        then the test and val sets won't be suitable : the model will be under-fitted.
+        because it won't be familiar with examples from the end of the recording.
+
+    Solution:
+    This can be corrected by shuffling the dataset before splitting it into train/test/val sets.
+
+    According to the latest update, the shuffle is a shuffled list of indices of
+    the original data (before batching) - meaning, the number of indices is equal to
+    the number of samples, and not to the number of batches.
+
+    If instead, we had a list of shuffled indices of the batched data - meaning,
+    the number of indices is equal to the number of batches - we could then have
+    the train/test/val sets be 0.6/0.2/0.2 fractional-subsets of the index list.
+
+    2. In Place Batching:
+        Problem:
+        The batched data is way too heavy to run any kind of operations on.
+        We are currently not running any operations on it (for exactly that reason),
+        and managing fine.
+        But this is still heavy on the storage.
+
+        Solution:
+        We could leave the original data untouched, and simply track the indices
+        of the samples and batches.
+        Every batch would be indicated by a starting index(the length of the batch is constant),
+        and we would have a shuffled list of starting indices for the whole dataset.
+        Then, the train/test/val will each take it's fractional subset (0.6-0.2-0.2) from
+        that shuffled list:
+            The train set will iterate through the first 0.6-subset of the shuffled index list
+            the test set "                    " the second 0.2-subset "                        "
+            the val set "                     " the third 0.2-subset "                        "
