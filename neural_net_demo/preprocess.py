@@ -1,166 +1,141 @@
 import os.path
-import pickle
 
 from scipy.io import loadmat
 import numpy as np
 
-path_to_pickle = ['data', 'pickled_data']
+from utils import store_pickle, get_pickle
 
 
-def store_pickle(obj, file_path_list):
-    pickle_path = os.path.join(*file_path_list)
-    with open(pickle_path, 'wb') as f:
-        pickle.dump(obj, f)
+# todo: convert Preprocessor to dataclass
 
+class Preprocessor:
+    path_to_pickle = ['data', 'pickled_data']
 
-def get_pickle(file_path_list):
-    pickle_path = os.path.join(*file_path_list)
-    with open(pickle_path, 'rb') as f:
-        return pickle.load(f)
+    def __init__(self, format_dictionary, mat_path, batch_parameters, train_test_val_ratio):
+        self.format_dictionary = format_dictionary
+        self.mat_path = mat_path
+        self.window_interval, self.frequency = batch_parameters
+        self.train_test_val_ratio = train_test_val_ratio
+        self.raw_length = 0
+        self.dataset_path = None
+        self.shuffle = None
 
+        '''parameter intermediate calculations'''
+        # convert ratio list to a cumulative sum of the fractions
+        for i in range(1, len(train_test_val_ratio)):
+            self.train_test_val_ratio[i] += self.train_test_val_ratio[i - 1]
 
-def matlab_to_numpy(path_to_mat_file: str, mat_format, force: bool = False):
-    """
-    This function converts a given .mat file (via the given path), to a numpy array.
+        self.window_size = round(self.frequency * self.window_interval)
 
-    The .mat file is converted according to the given format (providing flexibility),
-    according to the following rules(rules for mat_format parameter):
+        # convert matlab file to numpy array
+        self.matlab_to_numpy()
 
-    mat_format is a dictionary containing 2 entries:
-        - 'data set key path' - a list of keys to get to the data set.
-        - 'solution set key path' - a list of keys ot get to the solution set.
-    The way the key path is used (in both cases) is as exemplified:
-    set = mat_object[key_0][key_1][key_2]...
+        self.get_shuffle()
 
-    The resulting numpy array contains the data and the solution set in the following format:
+    def matlab_to_numpy(self, force: bool = False):
+        """
+        This function converts a given .mat file (via the given path), to a numpy array.
 
-        - dataset - matrix(channel_count, Fs * T): this matrix contains the EEG recordings, there are channel_count rows
-        (number of channels in the EEG device), and Fs * T (sampling frequency times the total duration of the
-        session).
+        The .mat file is converted according to the given format (providing flexibility),
+        according to the following rules(rules for mat_format parameter):
 
-        - solution set - vector(Fs * T): This vector contains a marker (an integer representing a keypress on
-        the keyboard) for each sample throughout the session.
+        mat_format is a dictionary containing 2 entries:
+            - 'data set key path' - a list of keys to get to the data set.
+            - 'solution set key path' - a list of keys ot get to the solution set.
+        The way the key path is used (in both cases) is as exemplified:
+        set = mat_object[key_0][key_1][key_2]...
 
-    The function pickles the data and stores it in a (pre-existing) directory "kayas_data"
+        The resulting numpy array contains the data and the solution set in the following format:
 
-    The Force Flag:
-    This function is meant to run only once, and if a pickle file with the name "dataset.pickle"
-    is present in the path "neural_net_demo/data/pickled_data/kayas_data", the function will do nothing.
-    Unless the force flag is set to true, this means that a new file needs to be loaded and pickled.
+            - dataset - matrix(channel_count, Fs * T): this matrix contains the EEG recordings,
+            there are channel_count rows (number of channels in the EEG device),
+            and Fs * T (sampling frequency times the total duration of the session).
 
-    :param: path_to_mat_file: path to the matlab file
-    :param: mat_format: the format of the given matlab file
-    :param: force: force flag
-    """
-    # parameters
-    kayas_path = path_to_pickle + ['kayas_data', 'dataset.pickle']
+            - solution set - vector(Fs * T): This vector contains a marker (an integer representing a keypress on
+            the keyboard) for each sample throughout the session.
 
-    # check if file already exists
-    if os.path.exists(os.path.join(*kayas_path)) and not force:
-        return
+        The function pickles the data and stores it in a (pre-existing) directory "kayas_data"
 
-    # load data from matlab file
-    mat_object = loadmat(path_to_mat_file)
+        The Force Flag:
+        This function is meant to run only once, and if a pickle file with the name "dataset.pickle"
+        is present in the path "neural_net_demo/data/pickled_data/kayas_data", the function will do nothing.
+        Unless the force flag is set to true, this means that a new file needs to be loaded and pickled.
 
-    # get arrays of dataset and solution set from key paths
-    data_set = mat_object
-    for key in mat_format['data set key path']:
-        data_set = data_set[key]
+        :param: path_to_mat_file: path to the matlab file
+        :param: mat_format: the format of the given matlab file
+        :param: force: force flag
+        """
+        # parameters
+        kayas_path = Preprocessor.path_to_pickle + ['kayas_data', 'dataset.pickle']
 
-    solution_set = mat_object
-    for key in mat_format['solution set key path']:
-        solution_set = solution_set[key]
+        # check if file already exists
+        if os.path.exists(os.path.join(*kayas_path)) and not force:
+            self.dataset_path = kayas_path
+            self.raw_length = get_pickle(kayas_path).shape[1]
+            return
 
-    # merge data and solution set to one numpy array
-    data_set = np.concatenate((data_set, solution_set), axis=1)
+        # todo: if the directory doesn't exist -> create the directory
 
-    # save to pickle files
-    store_pickle(data_set.T, kayas_path)
+        # load data from matlab file
+        mat_object = loadmat(self.mat_path)
 
+        # get arrays of dataset and solution set from key paths
+        data_set = mat_object
+        for key in self.format_dictionary['data set key path']:
+            data_set = data_set[key]
 
-def batch_and_set(raw: np.ndarray, raw_meta_data=None,
-                  window_interval: float = 0.15, frequency: int = 1000,
-                  train_test_val_ratio: np.ndarray =None):
-    """
-    This function applies a series of transformations to the raw data, from the .fif file (retrieved with mne),
-    to appropriate it for the network training.
+        solution_set = mat_object
+        for key in self.format_dictionary['solution set key path']:
+            solution_set = solution_set[key]
 
-    raw: The raw mne object - retrieved using mne.io.read_raw_fif(...)
-    window_interval: the time duration of one batch of data - this batch will be propagated through
-                     the network - one propagation per batch.
-                     Additionally, the CNN kernel will be the same size as this interval (the number of samples
-                     in this interval).
-                     (at least at the first layer).
-    frequency:the frequency of the samples [Hz]
+        # merge data and solution set to one numpy array
+        data_set = np.concatenate((data_set, solution_set), axis=1)
+        self.raw_length = data_set.shape[1]
 
-    todo: push all default parameters into metadata.
-    """
+        # save to pickle files
+        store_pickle(data_set.T, kayas_path)
 
-    # default values
-    # set default values of train_test_val_ratio
-    if train_test_val_ratio is None:
-        train_test_val_ratio = [0.6, 0.2, 0.2]
+        self.dataset_path = kayas_path
 
-    # convert ratio list to a cumulative sum of the fractions
-    for i in range(1, len(train_test_val_ratio)):
-        train_test_val_ratio[i] += train_test_val_ratio[i - 1]
+    def get_shuffle(self):
+        """
+        This function takes a numpy nd-array of the data, and generates shuffled index list.
 
-    # default value of meta data is 22 - for 22 channels in kaya's dataset
-    if raw_meta_data is None:
-        raw_meta_data = [22]
-    channel_count = raw_meta_data[0]
+        The Shuffle (a.k.a the returned value):
+        The shuffle (shuffled index list), is a triplet of index lists (for the 3 sets:
+        train, test, and validate), each containing a random series of indices from the original numpy array.
+        This shuffle is to be used to train the network, without generating any copies of the data.
 
-    window_size = round(frequency * window_interval)
-    train_test_val_lengths = np.round(np.multiply(train_test_val_ratio, raw.shape[1])).astype(int)
-    # build batched training set tensor and match with solution set
-    data_set = np.lib.stride_tricks.sliding_window_view(raw, (channel_count, window_size))[0]
+        How to Train the Network:
+        To train the network, the train_shuffle(the first element of the shuffle triplet)
+        is iterated over, and for each iteration the batch of samples starting
+        at the current index of the train_shuffle, is fed into the network.
 
-    # apply train-test-validation ratios to data
-    data_set = np.split(data_set, train_test_val_lengths[:-1])
+        :return: shuffle - the triples of shuffled index lists.
+        """
 
-    # get solution set
-    train_set, test_set, validate_set = data_set[:, :, :-1]
-    train_solution, test_solution, validate_solution = data_set[:, :, -1]
+        # generate random shuffle
+        rng = np.random.default_rng()
+        shuffle = rng.permutation(self.raw_length - self.window_size + 1)
 
-    return (train_set, test_set, validate_set), (train_solution, test_solution, validate_solution)
+        # get ratio indices
+        train_test_val_indices = np.multiply(self.train_test_val_ratio,
+                                                  shuffle.shape[0]).astype(int)[:-1]
 
-    # store_pickle(train_set, path_to_pickle + ['kayas_data', 'train_set.pickle'])
-    # store_pickle(test_set, path_to_pickle + ['kayas_data', 'test_set.pickle'])
-    # store_pickle(validate_set, path_to_pickle + ['kayas_data', 'validate_set.pickle'])
-    #
-    # store_pickle(train_solution, path_to_pickle + ['kayas_data', 'train_solution.pickle'])
-    # store_pickle(test_solution, path_to_pickle + ['kayas_data', 'test_solution.pickle'])
-    # store_pickle(validate_solution, path_to_pickle + ['kayas_data', 'validate_solution.pickle'])
+        # split shuffle into three sets (train/test/validate)
+        self.shuffle = np.split(shuffle, train_test_val_indices)
 
+    def get_shuffle_set(self, set_name):
+        set_name_key = {
+            'TRAIN': 0,
+            'TEST': 1,
+            'VAL': 2
+        }
 
-def get_dataset():
-    """
-    This function pre-processes the data form it's original state - in it's matlab format,
-    to its (almost) final state - an ordered numpy array.
+        return self.shuffle[set_name_key[set_name]]
 
-    The only step left is to shuffle the data.
-    Because the data is way too heavy to carry out this shuffle, a shuffled list of indices
-    is generated, which tells the program at which order to feed the input vectors
-    into the network.
-    """
-
-    '''Preprocessing for Kaya's hip Data'''
-    format_dictionary = {
-                        'data set key path': ['o', 0, 0, 5],
-                        'solution set key path': ['o', 0, 0, 4]
-    }
-    matlab_to_numpy('matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat', format_dictionary)
-    dataset = get_pickle(path_to_pickle + ['kayas_data', 'dataset.pickle'])
-
-    batched_data = batch_and_set(dataset)
-
-    # generate shuffle
-    rng = np.random.default_rng()
-    shuffle = rng.permutation(batched_data[0][0].size), \
-              rng.permutation(batched_data[0][1].size), \
-              rng.permutation(batched_data[0][2].size)
-
-    return batched_data, shuffle
+    def get_dataset(self):
+        return get_pickle(self.dataset_path)
 
 
 if __name__ == '__main__':

@@ -2,28 +2,16 @@ import os
 
 import torch
 import torch.nn as nn
-import torch.autograd.profiler as profiler
 import torch.optim as optim
 
+from numpy import ndarray
+
 # imported local files from project
-from preprocess import *
+from preprocess import Preprocessor
 from state_model_index import StateModelIndex
-
-
-# Set up input data
-total_samples = 3_072_000
-electrode_count = 144
-samples_per_batch = 77
-kernel_width = 10
-kernel_stride = 1
-fc_segment_length = 64
+from utils import store_pickle, timestamp
 
 model_dir = 'model_states'
-
-# temp_data_set = torch.randn(electrode_count, samples_per_batch)  # temp random data
-# data_labels = torch.from_numpy(np.random.choice([0, 1], size=(1,), p=[1. / 3, 2. / 3])).type(torch.FloatTensor)
-# [expression for item in iterable if condition == True]
-# temp_many_data_sets = [torch.randn(electrode_count, samples_per_batch) for i in range(10)]
 
 
 class MyModel(nn.Module):
@@ -62,7 +50,7 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
         if topology_metadata is None:
-            topology_metadata = [(144, 77), (10, 1, 64), (128, 1)]
+            topology_metadata = [(22, 150), (10, 1, 64), (128, 1)]
 
         # decomposition of the metadata variables in topology
         channel_count, batch_width = topology_metadata[0]
@@ -73,16 +61,16 @@ class MyModel(nn.Module):
         self.fc_layers = nn.ModuleList(
             [nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
 
-        # We have a kernel, Matrix[144][10]. We convolve this with the Batch (Matrix[144][77])
+        # We have a kernel, Matrix[22][10]. We convolve this with the Batch (Matrix[22][150])
         # We run this Matrix right\left over the batch (thus 67 output_channels in the end because stride is 1)
         # a single transformation for the second part of the 1st layer
         self.conv_segment = CustomConvSegment(channel_count, kernel_width, kernel_stride)
 
-        # 2nd layer: segment_2a/2b (see documentation).
+        # 2nd layer: segment_2a/2b (see __init__ documentation).
         segment_2a_length = (batch_width - kernel_width + 1)
         segment_2b_length = channel_count * fc_segment_length
 
-        self.fast_reduction_layer = nn.Linear(segment_2b_length + segment_2b_length,
+        self.fast_reduction_layer = nn.Linear(segment_2a_length + segment_2b_length,
                                               second_layer_out_channels)
         # 3rd layer
         self.reduction_to_output_layer = nn.Linear(second_layer_out_channels, third_layer_out_channels)
@@ -134,36 +122,13 @@ class CustomConvSegment(nn.Module):
         return x
 
 
-# First run preprocess.py (as main) to create updated pickle files from kayas data
-# Call a function from preprocess to Load the pickle data, it returns numpy array.
-
 def create_model():
     # Instantiate your model
     model = MyModel()
     return model
 
 
-def profile_model(model, data_set):
-    print(model)
-    # Run the forward pass with profiling
-    with profiler.profile(record_shapes=True, use_cuda=False) as prof:
-        with profiler.record_function("forward_pass"):
-            output = model(data_set)
-
-    # Print the profiling results
-    print(prof.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
-
-
-def timestamp():
-    from datetime import datetime
-    # datetime object containing current date and time
-    now = datetime.now()
-    # dd_mm_YY-H:M:S
-    dt_string = now.strftime("%d_%m_%Y-%H:%M:%S")
-    return dt_string
-
-
-def save_model(model: MyModel, shuffle: np.ndarray, loss, state_model_index=0):
+def save_model(model: MyModel, shuffle: ndarray, loss, state_model_index=0):
     """
     This function stores the model state (all current weights and biases) in an indexed file,
     after training on a mini-batch (an ordered list of input vectors,
@@ -189,8 +154,7 @@ def save_model(model: MyModel, shuffle: np.ndarray, loss, state_model_index=0):
     torch.save(model, model_path)
 
     # document the shuffle
-    with open(os.path.join(model_dir, 'shuffle.pickle'), 'wb') as file:
-        pickle.dump(shuffle, file)
+    store_pickle(shuffle, os.path.join(model_dir, 'shuffle.pickle'))
 
     # document the details: timestamp, loss...(TBD)
     with open(os.path.join(model_dir, 'details.txt'), 'w') as file:
@@ -212,17 +176,16 @@ def train_model(model, data, label, shuffle, state_model_index):
         data, label = data.cuda(), label.cuda()
 
     # init training process parameters
-    epochs = 5
     criterion = nn.BCELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.7)
     train_loss = 0.0
 
     # train loop
-    for data_vector, label_vector in zip(data[shuffle], label[shuffle]):
+    for index in range(data.shape[1]):
         optimizer.zero_grad()
 
-        output = model(data_vector)
-        loss = criterion(output, label_vector)
+        output = model(data[index])
+        loss = criterion(output, label[index])
         loss.backward()
 
         optimizer.step()
@@ -232,7 +195,7 @@ def train_model(model, data, label, shuffle, state_model_index):
     save_model(model, shuffle, train_loss, state_model_index)
 
 
-def main():
+def main(data_object):
 
     model = create_model()
 
@@ -246,13 +209,21 @@ def main():
         # Whether loading succeeded or failed -> start training session
         finally:
             # get dataset and shuffle from preprocess module
-            (train_set, test_set, validate_set), \
-                (train_solution, test_solution, validate_solution), \
-                shuffle_train, shuffle_test, shuffle_validate = get_dataset()
-
-            train_model(model, train_set, train_solution, shuffle_train, state_model_index)
+            data_set = data_object.get_dataset()
+            label_set = data_set[-1]
+            data_set = data_set[:-1]
+            train_model(model, data_set, label_set, data_object.get_shuffle_set('TRAIN'), state_model_index)
     # profile_model(model)
 
 
 if __name__ == '__main__':
-    main()
+    format_dictionary = {
+        'data set key path': ['o', 0, 0, 5],
+        'solution set key path': ['o', 0, 0, 4]
+    }
+    matlab_path = 'matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat'
+    batch_parameters = (0.15, 1000)  # window interval in seconds, and frequency of EEG measurements
+    train_test_validate_ratios = [0.6, 0.2, 0.2]
+
+    preprocessor = Preprocessor(format_dictionary, matlab_path, batch_parameters, train_test_validate_ratios)
+    main(preprocessor)

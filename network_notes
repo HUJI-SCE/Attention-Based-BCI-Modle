@@ -1,0 +1,19 @@
+1. fully connected layers in parallel:
+    Problem:
+    We are multiplying multiply fully connected layers, in series.
+    Even though these layers are independent, and could be computed in parralel.
+        # list of linear transformations for the segments in the 1st layer.
+        self.fc_layers = nn.ModuleList(
+            [nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
+        ...
+        ...
+        # list of applying the random Linear transformations on each electrode (list of segments [exciting!])
+        fc_outputs = [fc(x[i, :]) for i, fc in enumerate(self.fc_layers)]
+
+    Solution:
+    We can multiply a tensor of weights by the matrix of channels: T * C
+    where T(weight tensor) has dimensions (samples per channel) x (out channels) x (channel count)
+    and C(batch matrix) has dimensions 1 x (samples per batch) x (channel count)
+
+    This multiplication can be done in parallel, and can save time, especially when using
+    CUDA GPUs.
