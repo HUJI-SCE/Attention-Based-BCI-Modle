@@ -1,10 +1,11 @@
 import os
+import time
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from numpy import ndarray
+import numpy as np
 
 # imported local files from project
 from preprocess import Preprocessor
@@ -44,13 +45,14 @@ class MyModel(nn.Module):
         The constructor decides what to do with the amounts given - thus, the caller needs to be
         mindful of the topology design in the constructor.
 
-        * topology: [(channel_count, batch_width), (kernel_width, kernel_stride, fc_segment_length)]
+        * topology: [(channel_count, batch_width), (kernel_width, kernel_stride, fc_segment_length),
+                     (second_layer_output, third_layer_output)]
         """
 
         super(MyModel, self).__init__()
 
         if topology_metadata is None:
-            topology_metadata = [(22, 150), (10, 1, 64), (128, 1)]
+            topology_metadata = [(22, 150), (10, 1, 64), (128, 9)]
 
         # decomposition of the metadata variables in topology
         channel_count, batch_width = topology_metadata[0]
@@ -60,6 +62,9 @@ class MyModel(nn.Module):
         # list of linear transformations for the segments in the 1st layer.
         self.fc_layers = nn.ModuleList(
             [nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
+
+        # rearrange fc layers into tensor
+        self.fc_tensor = torch.stack([fc.weight for fc in self.fc_layers]).permute(0, 2, 1)
 
         # We have a kernel, Matrix[22][10]. We convolve this with the Batch (Matrix[22][150])
         # We run this Matrix right\left over the batch (thus 67 output_channels in the end because stride is 1)
@@ -75,15 +80,13 @@ class MyModel(nn.Module):
         # 3rd layer
         self.reduction_to_output_layer = nn.Linear(second_layer_out_channels, third_layer_out_channels)
 
-        # activation function embedded in all layers
-        self.sigmoid = nn.Sigmoid()
+        # activation function embedded in final layer alone
+        # softmax: ensures that the result adds up to one - suitable for a distribution of a guess.
+        self.softmax = nn.Softmax(dim=0)
 
     def forward(self, x):
         # Fully connected layers for each channel
-        # list of applying the random Linear transformations on each electrode (list of segments [exciting!])
-        fc_outputs = [fc(x[i, :]) for i, fc in enumerate(self.fc_layers)]
-        # convert to Tensor and not List of Tensors:
-        fc_outputs = torch.cat(fc_outputs)
+        fc_outputs = torch.matmul(x.unsqueeze(1), self.fc_tensor).flatten()
 
         # Convolutional segment (odd one out lol)
         conv_output = self.conv_segment(x)
@@ -99,7 +102,7 @@ class MyModel(nn.Module):
         x = nn.functional.relu(self.reduction_to_output_layer(second_layer))
 
         # Apply sigmoid activation for binary classification
-        x = self.sigmoid(x)
+        x = self.softmax(x)
 
         return x
 
@@ -128,7 +131,7 @@ def create_model():
     return model
 
 
-def save_model(model: MyModel, shuffle: ndarray, loss, state_model_index=0):
+def save_model(model: MyModel, shuffle: np.ndarray, loss_tracker, state_model_index=0):
     """
     This function stores the model state (all current weights and biases) in an indexed file,
     after training on a mini-batch (an ordered list of input vectors,
@@ -139,9 +142,6 @@ def save_model(model: MyModel, shuffle: ndarray, loss, state_model_index=0):
     with respect to the recording (of the EEG), should be fed into the network (This value
     is randomly generated).
 
-    todo: determine whether the shuffle should be generated at this stage, or at another stage
-        and implement.
-
     :param: model - the current state of the model, as a pytorch network object.
     :param: shuffle - the order in which the input vectors.
     :param: the training loss of the model
@@ -149,20 +149,22 @@ def save_model(model: MyModel, shuffle: ndarray, loss, state_model_index=0):
     """
 
     # save model state in suitable file
-    os.system(os.path.join(model_dir, f'model_{state_model_index}'))
-    model_path = os.path.join(model_dir, 'model.pth')
-    torch.save(model, model_path)
+    os.system(f'mkdir {os.path.join(model_dir, f"model_{state_model_index}")}')
+    current_model_dir = os.path.join(model_dir, f'model_{state_model_index}')
+    current_model_path = os.path.join(current_model_dir, 'model.pth')
+    torch.save(model, current_model_path)
 
-    # document the shuffle
-    store_pickle(shuffle, os.path.join(model_dir, 'shuffle.pickle'))
+    # document the shuffle and the loss
+    store_pickle(shuffle, [current_model_dir, 'shuffle.pickle'])
+    store_pickle(loss_tracker, [current_model_dir, 'loss.pickle'])
 
     # document the details: timestamp, loss...(TBD)
-    with open(os.path.join(model_dir, 'details.txt'), 'w') as file:
+    with open(os.path.join(current_model_dir, 'details.txt'), 'w') as file:
         file.write(f'{timestamp()}\n')
-        file.write(f'training loss: {loss}')
+        file.write(f'training final loss: {loss_tracker[-1]}')
 
 
-def train_model(model, data, label, shuffle, state_model_index):
+def train_model(model, data, label, shuffle, batch_size, state_model_index):
     """First we are moving our data to GPU and then removing any gradient
      so that it doesn't affect our training.
      Next we are making a forward pass and obtain the outputs.
@@ -179,20 +181,28 @@ def train_model(model, data, label, shuffle, state_model_index):
     criterion = nn.BCELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.7)
     train_loss = 0.0
+    loss_tracker = torch.tensor([])
 
     # train loop
-    for index in range(data.shape[1]):
+    print('starting time')
+    t1 = time.time()
+    for sh_index in shuffle[:1000]:
         optimizer.zero_grad()
+        output = model(data[:, sh_index:sh_index + batch_size])
 
-        output = model(data[index])
-        loss = criterion(output, label[index])
+        loss = criterion(output, label[sh_index + batch_size])
+
+        # save loss value, for analysis
+        loss_tracker = torch.cat((loss_tracker, loss.view(1)), dim=0)
+
         loss.backward()
 
         optimizer.step()
 
         train_loss += loss.item() * data.size(0)
+    print(time.time() - t1)
     # print(f'Epoch: {i + 1} / {epochs} \t\t\t Training Loss:{train_loss / len(data_set)}')
-    save_model(model, shuffle, train_loss, state_model_index)
+    save_model(model, shuffle[:1000], loss_tracker, state_model_index)
 
 
 def main(data_object):
@@ -203,17 +213,22 @@ def main(data_object):
     with StateModelIndex('state_model_index') as state_model_index:
 
         # Loading model from path (if the path exists)
-        try:
-            model = torch.load(os.path.join(model_dir, f'model_{state_model_index}.pth'))
+        if state_model_index.value:
+            model = torch.load(os.path.join(model_dir, f'model_{state_model_index.value - 1}.pth'))
 
-        # Whether loading succeeded or failed -> start training session
-        finally:
-            # get dataset and shuffle from preprocess module
-            data_set = data_object.get_dataset()
-            label_set = data_set[-1]
-            data_set = data_set[:-1]
-            train_model(model, data_set, label_set, data_object.get_shuffle_set('TRAIN'), state_model_index)
-    # profile_model(model)
+        # get dataset and shuffle from preprocess module
+        data_set = data_object.get_dataset()
+
+        # convert float64 dataset from numpy array to float32 torch tensor
+        label_set = data_set[1]
+        data_set = torch.tensor(data_set[0], dtype=torch.float32)
+
+        # train model
+        train_model(model, data_set, label_set,
+                    data_object.get_shuffle_set('TRAIN'), 150, state_model_index.value)
+
+        # increment state model index
+        state_model_index.set_smi(state_model_index + 1)
 
 
 if __name__ == '__main__':
@@ -221,7 +236,7 @@ if __name__ == '__main__':
         'data set key path': ['o', 0, 0, 5],
         'solution set key path': ['o', 0, 0, 4]
     }
-    matlab_path = 'matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat'
+    matlab_path = '../data/matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat'
     batch_parameters = (0.15, 1000)  # window interval in seconds, and frequency of EEG measurements
     train_test_validate_ratios = [0.6, 0.2, 0.2]
 

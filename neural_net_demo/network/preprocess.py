@@ -1,5 +1,7 @@
 import os.path
 
+from torch.nn.functional import one_hot
+from torch import tensor, int64
 from scipy.io import loadmat
 import numpy as np
 
@@ -9,7 +11,7 @@ from utils import store_pickle, get_pickle
 # todo: convert Preprocessor to dataclass
 
 class Preprocessor:
-    path_to_pickle = ['data', 'pickled_data']
+    path_to_pickle = ['..', 'data', 'pickled_data']
 
     def __init__(self, format_dictionary, mat_path, batch_parameters, train_test_val_ratio):
         self.format_dictionary = format_dictionary
@@ -65,17 +67,20 @@ class Preprocessor:
         :param: mat_format: the format of the given matlab file
         :param: force: force flag
         """
+
+        '''preamble'''
         # parameters
         kayas_path = Preprocessor.path_to_pickle + ['kayas_data', 'dataset.pickle']
 
         # check if file already exists
         if os.path.exists(os.path.join(*kayas_path)) and not force:
             self.dataset_path = kayas_path
-            self.raw_length = get_pickle(kayas_path).shape[1]
+            self.raw_length = get_pickle(kayas_path)[0].shape[1]
             return
 
         # todo: if the directory doesn't exist -> create the directory
 
+        '''extract data form matlab file'''
         # load data from matlab file
         mat_object = loadmat(self.mat_path)
 
@@ -88,12 +93,22 @@ class Preprocessor:
         for key in self.format_dictionary['solution set key path']:
             solution_set = solution_set[key]
 
-        # merge data and solution set to one numpy array
-        data_set = np.concatenate((data_set, solution_set), axis=1)
+        # store length of raw data
         self.raw_length = data_set.shape[1]
 
-        # save to pickle files
-        store_pickle(data_set.T, kayas_path)
+        '''encode solution set into a one-hot encoding'''
+        # get all possible solutions and map them to ordinal numbers [0 - max]
+        for ordinal, option in enumerate(np.unique(solution_set)):
+            solution_set[solution_set == option] = ordinal
+
+        # make solution set into one-hot matrix
+        solution_set = one_hot(tensor(solution_set, dtype=int64).flatten()).float()
+
+        # pack data and solution set
+        data_set = data_set.T, solution_set
+
+        # save to pickle file
+        store_pickle(data_set, kayas_path)
 
         self.dataset_path = kayas_path
 

@@ -40,9 +40,12 @@ class StateModelIndex:
             with open(self.filename, 'wb') as file:
                 pickle.dump(self.value, file)
 
-        return self.value
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Save the updated integer value to the pickle file
         with open(self.filename, 'wb') as file:
             pickle.dump(self.value, file)
+
+    def set_smi(self, value):
+        self.value = value

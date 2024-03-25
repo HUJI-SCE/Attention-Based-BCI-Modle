@@ -39,3 +39,19 @@ Kayas Data:
             The train set will iterate through the first 0.6-subset of the shuffled index list
             the test set "                    " the second 0.2-subset "                        "
             the val set "                     " the third 0.2-subset "                        "
+
+Code Notes:
+Torch and Numpy:
+    Regarding the following lines in cnn.py -> main(...) -> with ... :
+    ...
+    # convert float64 dataset from numpy array to float32 torch tensor
+    label_set = data_set[1]
+    data_set = torch.tensor(data_set[0], dtype=torch.float32)
+    ...
+
+    todo: if this causes time efficiency problems, consider working with Pytorch exclusively
+    todo(NOTE): converting dtype to float32 (as opposed to it's original dtype float64 - which is double)
+                This is done in order to save time(and to match the dtype
+                of the weight tensor a.k.a self.fc_tensor).
+                If crucial information is lost in this operation, consider going back to float64,
+                and matching the weight tensor to it as well.
