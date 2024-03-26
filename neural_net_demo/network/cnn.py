@@ -12,7 +12,8 @@ from preprocess import Preprocessor
 from state_model_index import StateModelIndex
 from utils import store_pickle, timestamp
 
-model_dir = 'model_states'
+MODEL_PTH = 'model.pth'
+MODEL_DIR = 'model_states'
 
 
 class MyModel(nn.Module):
@@ -149,8 +150,8 @@ def save_model(model: MyModel, shuffle: np.ndarray, loss_tracker, state_model_in
     """
 
     # save model state in suitable file
-    os.system(f'mkdir {os.path.join(model_dir, f"model_{state_model_index}")}')
-    current_model_dir = os.path.join(model_dir, f'model_{state_model_index}')
+    os.system(f'mkdir {os.path.join(MODEL_DIR, f"model_{state_model_index}")}')
+    current_model_dir = os.path.join(MODEL_DIR, f'model_{state_model_index}')
     current_model_path = os.path.join(current_model_dir, 'model.pth')
     torch.save(model, current_model_path)
 
@@ -214,7 +215,8 @@ def main(data_object):
 
         # Loading model from path (if the path exists)
         if state_model_index.value:
-            model = torch.load(os.path.join(model_dir, f'model_{state_model_index.value - 1}.pth'))
+            print(os.getcwd())
+            model = torch.load(os.path.join(MODEL_DIR, f'model_{state_model_index.value - 1}', MODEL_PTH))
 
         # get dataset and shuffle from preprocess module
         data_set = data_object.get_dataset()
@@ -228,7 +230,7 @@ def main(data_object):
                     data_object.get_shuffle_set('TRAIN'), 150, state_model_index.value)
 
         # increment state model index
-        state_model_index.set_smi(state_model_index + 1)
+        state_model_index.set_smi(state_model_index.value + 1)
 
 
 if __name__ == '__main__':
