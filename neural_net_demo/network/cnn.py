@@ -232,15 +232,26 @@ def main(data_object):
         # increment state model index
         state_model_index.set_smi(state_model_index.value + 1)
 
+with open('/cs/usr/loi201loi/Desktop/Project/neural_net_demo/out.txt', 'w') as f:
+    print('before if __name__',file=f)
 
 if __name__ == '__main__':
     format_dictionary = {
         'data set key path': ['o', 0, 0, 5],
         'solution set key path': ['o', 0, 0, 4]
     }
+    with open('/cs/usr/loi201loi/Desktop/Project/neural_net_demo/out.txt', 'w') as f:
+        print('started if __name__',file=f)
+        print('working dir is:', os.getcwd(), file=f)
     matlab_path = '../data/matlab_files/5F-SubjectH-160804-5St-SGLHand-HFREQ.mat'
     batch_parameters = (0.15, 1000)  # window interval in seconds, and frequency of EEG measurements
     train_test_validate_ratios = [0.6, 0.2, 0.2]
+    with open('/cs/usr/loi201loi/Desktop/Project/neural_net_demo/out.txt', 'w') as f:
+        print('We are entering preprocess', file=f)
 
+    
     preprocessor = Preprocessor(format_dictionary, matlab_path, batch_parameters, train_test_validate_ratios)
+    with open('/cs/usr/loi201loi/Desktop/Project/neural_net_demo/out.txt', 'w') as f:
+        print('We are entering main', file=f)
+
     main(preprocessor)
