@@ -232,8 +232,8 @@ def main(data_object):
         # increment state model index
         state_model_index.set_smi(state_model_index.value + 1)
 
-with open('/cs/usr/loi201loi/Desktop/Project/neural_net_demo/out.txt', 'w') as f:
-    print('before if __name__',file=f)
+#with open('/cs/usr/loi201loi/Desktop/Project/neural_net_demo/out.txt', 'w') as f:
+#    print('before if __name__',file=f)
 
 if __name__ == '__main__':
     format_dictionary = {
