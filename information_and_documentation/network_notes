@@ -1,0 +1,54 @@
+1. fully connected layers in parallel:
+    Problem:
+    We are multiplying multiply fully connected layers, in series.
+    Even though these layers are independent, and could be computed in parralel.
+        # list of linear transformations for the segments in the 1st layer.
+        self.fc_layers = nn.ModuleList(
+            [nn.Linear(batch_width, fc_segment_length) for _ in range(channel_count)])
+        ...
+        ...
+        # list of applying the random Linear transformations on each electrode (list of segments [exciting!])
+        fc_outputs = [fc(x[i, :]) for i, fc in enumerate(self.fc_layers)]
+
+    Solution:
+    We can multiply a tensor of weights by the matrix of channels: T * C
+    where T(weight tensor) has dimensions (samples per channel) x (out channels) x (channel count)
+    and C(batch matrix) has dimensions 1 x (samples per batch) x (channel count)
+
+    This multiplication can be done in parallel, and can save time, especially when using
+    CUDA GPUs.
+
+2. previous label samples as additional input:
+    Current State:
+    The network is guessing the next action taken by the user
+    based on the her brainwaves in the last 150ms.
+    But there also exists correlation between the actions taken by the user in
+    the last 150ms. These actions are not known to the network prior to the guess,
+    but they could be...
+
+    Instead of training the network on the brainwaves alone, we can train it on
+    the label set as well - inserting the actions taken by the user in the last 150ms (or
+    even further back) - this would simulate a scenario in which the user, is calibrating
+    the network by interacting with the keyboard and mouse.
+    After the network succeeds in guessing the correct actions within a small enough error,
+    The actions taken by the user will no longer be given to the network - a post calibration
+    stage in which the user stops physically interacting with the input devices.
+    Instead, the label inputs will be the networks prior guesses:
+
+    Calibration Stage:
+        Input:
+            brainwaves: a matrix of (number of channels x batch interval) - EEG recordings.
+            prior actions: a matrix of (one-hot length x batch interval) - Actual actions
+                           taken by the user (at each milisecond), encoded into one hot vectors.
+
+        Output:
+            a single one hot guess: vector of (one-hot length).
+
+    Post Calibration Stage:
+        Input:
+            brainwaves: a matrix of (number of channels x batch interval) - EEG recordings
+            prior action guesses: a matrix of (one-hot length x batch interval) - The last
+                                  150 (or more) guesses of the network.
+
+        Output:
+            a single one hot guess: vector of (one-hot length).
