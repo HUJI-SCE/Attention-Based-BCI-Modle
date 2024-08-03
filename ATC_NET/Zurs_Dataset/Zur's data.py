@@ -429,12 +429,12 @@ if __name__ == '__main__':
     param_samples = 128  # Adjust this to change the time before click for labeling
 
     #preprocess()
-    create_clicks_array()
-    interpolate_data()
-    SMOTE_data()
+    #create_clicks_array()
+    #interpolate_data()
+    #SMOTE_data()
 
-    X = np.load('SMOTEed_eeg_data.npy')
-    y = np.load('SMOTEed_eeg_labels.npy')
+    X = np.load('subjects/BIJVZD/SMOTEed_eeg_data.npy')
+    y = np.load('subjects/BIJVZD/SMOTEed_eeg_labels.npy')
     # Parameters
-    training = False
+    training = True
     if(training): train(X,y, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
