@@ -9,7 +9,7 @@ from keras.models import load_model
 import models
 from sklearn.model_selection import train_test_split
 from scipy.io import loadmat
-from imblearn.over_sampling import SMOTE
+#from imblearn.over_sampling import SMOTE
 from os.path import join
 from tensorflow.keras.metrics import Precision, Recall
 from collections import Counter
@@ -432,30 +432,30 @@ def interpolate_data():
     np.save('elaborated_labels.npy', y)
 
 
-def SMOTE_data():
-    global X, y, X_resampled, y_resampled
-    X = np.load('elaborated_eeg_data.npy')
-    y = np.load('elaborated_labels.npy')
-
-    print(X.shape)
-    print(y.shape)
-    # EEFFOUS X[2400][1][128][512] y[2400]
-    # BIJVZD  X[2400][1][128][512] y[2400]
-
-    # Reshape X to a 2D array for SMOTE
-    X = X.reshape((X.shape[0], -1))
-    # Apply SMOTE
-    smote = SMOTE(sampling_strategy='auto', random_state=42)
-    X_resampled, y_resampled = smote.fit_resample(X, y)
-    # Convert y_resampled back to one-hot encoding
-    y_resampled = np.eye(2)[y_resampled]
-    # Reshape X_resampled back to its original shape
-    X_resampled = X_resampled.reshape((X_resampled.shape[0], 1, 128, 512))
-    # Verify the new class distribution
-    print("Original dataset shape:", Counter(y))
-    print("Resampled dataset shape:", Counter(np.argmax(y_resampled, axis=1)))
-    np.save("SMOTEed_eeg_data", X_resampled)
-    np.save("SMOTEed_eeg_labels", y_resampled)
+# def SMOTE_data():
+#     global X, y, X_resampled, y_resampled
+#     X = np.load('elaborated_eeg_data.npy')
+#     y = np.load('elaborated_labels.npy')
+#
+#     print(X.shape)
+#     print(y.shape)
+#     # EEFFOUS X[2400][1][128][512] y[2400]
+#     # BIJVZD  X[2400][1][128][512] y[2400]
+#
+#     # Reshape X to a 2D array for SMOTE
+#     X = X.reshape((X.shape[0], -1))
+#     # Apply SMOTE
+#     smote = SMOTE(sampling_strategy='auto', random_state=42)
+#     X_resampled, y_resampled = smote.fit_resample(X, y)
+#     # Convert y_resampled back to one-hot encoding
+#     y_resampled = np.eye(2)[y_resampled]
+#     # Reshape X_resampled back to its original shape
+#     X_resampled = X_resampled.reshape((X_resampled.shape[0], 1, 128, 512))
+#     # Verify the new class distribution
+#     print("Original dataset shape:", Counter(y))
+#     print("Resampled dataset shape:", Counter(np.argmax(y_resampled, axis=1)))
+#     np.save("SMOTEed_eeg_data", X_resampled)
+#     np.save("SMOTEed_eeg_labels", y_resampled)
 
 
 if __name__ == '__main__':
