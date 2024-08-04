@@ -1,9 +1,11 @@
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
 from tensorflow.keras.utils import plot_model
 import numpy as np
 import matplotlib.pyplot as plt
 from keras.callbacks import EarlyStopping
 import scipy.io
+from keras.models import load_model
+
 import models
 from sklearn.model_selection import train_test_split
 from scipy.io import loadmat
@@ -28,8 +30,8 @@ def preprocess(subject_count=15, trial_count=40, sound_count=30, repeat_count=2)
     """
 
     subject_list = [
-        #'BIJVZD',
-        'EFFEUS'
+        'BIJVZD',
+        #'EFFEUS'
         # ,'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
     # 'TUZEZT', 'UOBXJO', 'WWDVDF' 'YMKSWS', 'ZLIDEI']
         ]
@@ -74,7 +76,7 @@ def preprocess(subject_count=15, trial_count=40, sound_count=30, repeat_count=2)
 
 def create_clicks_array(subject_count=15, trial_count=40, sound_count=30, repeat_count=2):
 
-    subject_list = ['EFFEUS']  # , 'BIJVZD', 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
+    subject_list = ['BIJVZD']  # , 'BIJVZD', 'EFFEUS', 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
     # 'TUZEZT', 'UOBXJO', 'WWDVDF' 'YMKSWS', 'ZLIDEI']
 
     #TODO: create a list for subject in subject_list
@@ -86,7 +88,7 @@ def create_clicks_array(subject_count=15, trial_count=40, sound_count=30, repeat
     #  40 trials
     #  256 time samples per 2 seconds, 120 seconds per trial
     response_labels = np.zeros((trial_count, 256 * 60))
-    mat_v7=True
+    mat_v7=False
     click_counter = 0
     if(mat_v7==True):
         for trial_idx, trial in enumerate(resptms):  # for every trial
@@ -123,11 +125,11 @@ def create_clicks_array(subject_count=15, trial_count=40, sound_count=30, repeat
 
 def load_behavioral_data(subject):
     # Load the .mat file
-    subject_list = ['EFFEUS']  # , 'BIJVZD', 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
+    subject_list = ['BIJVZD']  # , 'BIJVZD', 'EFFEUS'. 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
     # 'TUZEZT', 'UOBXJO', 'WWDVDF' 'YMKSWS', 'ZLIDEI']
     mat_file_path = join(f'{subject}', f'ShortClipTwoBack_res_sbj{subject_list[0]}.mat')
 
-    mat_is_v7 = True
+    mat_is_v7 = False
     if (mat_is_v7):
         import h5py
         # Open the MATLAB v7.3 file
@@ -247,6 +249,34 @@ def segment_eeg_data_with_overlap(eeg, labels, window_duration, overlap, n_class
     return segmented_data, segmented_labels
 
 
+
+def test(model, Z, w):
+    # Verify the class distribution in the testing set
+    print("Testing set class distribution:", Counter(np.argmax(w, axis=1)))
+
+    # Evaluate the model on the testing data
+    loss, accuracy, precision, recall = model.evaluate(Z, w)
+    print(f'Testing loss: {loss},'
+          f' Testing accuracy: {accuracy},'
+          f' Testing precision: {precision},'
+          f' Testing recall: {recall}'
+          )
+
+    # Predict the labels for the testing set
+    y_pred = model.predict(Z)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    y_true_classes = np.argmax(w, axis=1)
+
+    # Generate and display the confusion matrix
+    cm = confusion_matrix(y_true_classes, y_pred_classes)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    disp.plot()
+    plt.show()
+
+def load_trained_model(model_path):
+    return load_model(model_path)
+
+
 def train(X,y, in_chans, in_samples, tcn_kernel):
     global history
     # Define and compile the model with the new window size
@@ -268,6 +298,8 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
                            ])
 
     # Split the data into training and validation sets
+    print(X.shape)
+    print(y.shape)
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # Verify the new shapes
@@ -300,6 +332,9 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
     cm = confusion_matrix(y_true, y_pred_classes)
     print("Confusion Matrix:\n", cm)
     print("Classification Report:\n", classification_report(y_true, y_pred_classes))
+    return model
+
+
 def interpolate_eeg(data, original_length, target_length):
     interpolated_data = np.zeros((data.shape[0], data.shape[1], data.shape[2], target_length))
     for i in range(data.shape[0]):
@@ -327,6 +362,8 @@ def interpolate_clicks(clicks, target_length):
 def interpolate_data():
     global X, y, total_sounds
     eeg = np.load('ordered_clips.npy')
+    # EEFFOUS: eeg[60][40][128][256] clicks_array[40][15360]
+    # BIJVZD:  eeg[60][40][128][256] clicks_array[40][15360]
     clicks_array = np.load('ordered_response_labels.npy')
 
     # Apply interpolation to double the number of time samples
@@ -399,6 +436,12 @@ def SMOTE_data():
     global X, y, X_resampled, y_resampled
     X = np.load('elaborated_eeg_data.npy')
     y = np.load('elaborated_labels.npy')
+
+    print(X.shape)
+    print(y.shape)
+    # EEFFOUS X[2400][1][128][512] y[2400]
+    # BIJVZD  X[2400][1][128][512] y[2400]
+
     # Reshape X to a 2D array for SMOTE
     X = X.reshape((X.shape[0], -1))
     # Apply SMOTE
@@ -428,13 +471,26 @@ if __name__ == '__main__':
     # Parameter: number of time samples corresponding to 1 second
     param_samples = 128  # Adjust this to change the time before click for labeling
 
-    #preprocess()
-    #create_clicks_array()
-    #interpolate_data()
-    #SMOTE_data()
+#    preprocess()
+#    create_clicks_array()
+#    interpolate_data()
+#    SMOTE_data()
 
-    X = np.load('subjects/BIJVZD/SMOTEed_eeg_data.npy')
-    y = np.load('subjects/BIJVZD/SMOTEed_eeg_labels.npy')
+    model_path = 'model1.h5'
     # Parameters
     training = True
-    if(training): train(X,y, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
+    if(training):
+        X = np.load('subjects/BIJVZD/SMOTEed_eeg_data.npy')
+        y = np.load('subjects/BIJVZD/SMOTEed_eeg_labels.npy')
+        model = train(X,y, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
+        # Save the model
+        model.save(model_path)
+        print(f'Model saved to {model_path}')
+    testing = True
+    if(testing):
+        loaded_model = load_trained_model(model_path)
+        Z = np.load('subjects/EFFEUS/SMOTEed_eeg_data.npy')
+        w = np.load('subjects/EFFEUS/SMOTEed_eeg_labels.npy')
+        print(Z.shape)
+        print(w.shape)
+        test(loaded_model,Z,w)

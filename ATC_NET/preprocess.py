@@ -303,11 +303,11 @@ def load_ELIS_data(data_path, subject, training, all_trials=True):
 
 
     if training:
-        X = np.load('Zurs_Dataset/SMOTEed_eeg_data.npy')
-        y = np.load('Zurs_Dataset/SMOTEed_eeg_labels.npy')
+        X = np.load('Zurs_Dataset/subjects/BIJVZD/SMOTEed_eeg_data.npy')
+        y = np.load('Zurs_Dataset/subjects/BIJVZD/SMOTEed_eeg_labels.npy')
     else:
-        X = np.load('Zurs_Dataset/elaborated_eeg_data.npy')
-        y = np.load('Zurs_Dataset/elaborated_labels.npy')
+        X = np.load('Zurs_Dataset/subjects/EFFEUS/SMOTEed_eeg_labels.npy')
+        y = np.load('Zurs_Dataset/subjects/EFFEUS/SMOTEed_eeg_labels.npy')
 
     return X, y
 
