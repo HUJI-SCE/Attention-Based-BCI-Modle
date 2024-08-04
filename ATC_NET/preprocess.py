@@ -30,76 +30,76 @@ from sklearn.utils import shuffle
 
 ############### ARAN CODE
 import torch
-import mne
-from mne.preprocessing import ICA
-import numpy as np
-import pickle
-from os.path import exists
+# import mne
+# from mne.preprocessing import ICA
+# import numpy as np
+# import pickle
+# from os.path import exists
 
 
-def pre_ica(X: np.ndarray):
-    sfreq = 256
-    channel_names = ['Fp1', 'AF3', 'F7', 'F3', 'FC1', 'FC5', 'T7', 'C3',
-                     'CP1', 'CP5', 'P7', 'P3', 'Pz', 'PO3', 'O1', 'Oz',
-                     'O2', 'PO4', 'P4', 'P8', 'CP6', 'CP2', 'C4', 'T8',
-                     'FC6', 'FC2', 'F4', 'F8', 'AF4', 'Fp2', 'Fz', 'Cz',
-                     'EXG1', 'EXG2', 'EXG3', 'EXG4', 'EXG5', 'EXG6', 'EXG7', 'EXG8',
-                     'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet', 'Temp']
-    channel_types = ['eeg'] * 32 + ['eog'] * 15
+# def pre_ica(X: np.ndarray):
+#     sfreq = 256
+#     channel_names = ['Fp1', 'AF3', 'F7', 'F3', 'FC1', 'FC5', 'T7', 'C3',
+#                      'CP1', 'CP5', 'P7', 'P3', 'Pz', 'PO3', 'O1', 'Oz',
+#                      'O2', 'PO4', 'P4', 'P8', 'CP6', 'CP2', 'C4', 'T8',
+#                      'FC6', 'FC2', 'F4', 'F8', 'AF4', 'Fp2', 'Fz', 'Cz',
+#                      'EXG1', 'EXG2', 'EXG3', 'EXG4', 'EXG5', 'EXG6', 'EXG7', 'EXG8',
+#                      'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet', 'Temp']
+#     channel_types = ['eeg'] * 32 + ['eog'] * 15
 
-    # create mne info
-    info = mne.create_info(ch_names=channel_names, sfreq=sfreq, ch_types=channel_types)
-    montage = mne.channels.make_standard_montage('standard_1020')
-    info.set_montage(montage)
+    ## create mne info
+    # info = mne.create_info(ch_names=channel_names, sfreq=sfreq, ch_types=channel_types)
+    # montage = mne.channels.make_standard_montage('standard_1020')
+    # info.set_montage(montage)
+    #
+    ## convert data to mne
+    # raw = mne.io.RawArray(X, info)
+    # raw.info['bads'] = ['T7']
 
-    # convert data to mne
-    raw = mne.io.RawArray(X, info)
-    raw.info['bads'] = ['T7']
-
-    # apply band-pass filter to 1-40Hz
-    raw_filtered = raw.copy().filter(l_freq=1.0, h_freq=40)
-
-    return raw_filtered
+    ## apply band-pass filter to 1-40Hz
+    # raw_filtered = raw.copy().filter(l_freq=1.0, h_freq=40)
+    #
+    # return raw_filtered
 
 
-def ica(raw_filtered: np.ndarray, new=False):
-
-    pickle_path = 'ica.pickle'
-
-    # use saved ICA object, if one exists
-    if exists(pickle_path) and not new:
-        with open(pickle_path, 'rb') as f:
-            ica = pickle.load(f)
-            return ica.get_sources(raw_filtered).get_data()
-
-    if new:
-        print('ICA object file doesn\'t exist, must create new one')
-
-    # apply ICA
-    ica = ICA(n_components=22, random_state=42, max_iter=800)
-    ica.fit(raw_filtered)
-
-    # ica.plot_components()
-
-    # Find the ICA components that match the EOG pattern
-    eog_indices, eog_scores = ica.find_bads_eog(raw_filtered)
-    # ica.plot_scores(eog_scores)
-
-    # Inspect the identified components
-    # ica.plot_properties(raw_filtered, picks=eog_indices)
-
-    # If you want to remove the identified EOG artifacts
-    ica.exclude = eog_indices
-    ica.apply(raw_filtered)
-
-    # Plot the cleaned data
-    # raw_filtered.plot()
-
-    # save ICA object
-    with open('ica.pickle', 'wb') as f:
-        pickle.dump(ica, f)
-
-    return ica.get_sources(raw_filtered).get_data()
+# def ica(raw_filtered: np.ndarray, new=False):
+#
+#     pickle_path = 'ica.pickle'
+#
+#     # use saved ICA object, if one exists
+#     if exists(pickle_path) and not new:
+#         with open(pickle_path, 'rb') as f:
+#             ica = pickle.load(f)
+#             return ica.get_sources(raw_filtered).get_data()
+#
+#     if new:
+#         print('ICA object file doesn\'t exist, must create new one')
+#
+#     # apply ICA
+#     ica = ICA(n_components=22, random_state=42, max_iter=800)
+#     ica.fit(raw_filtered)
+#
+#     # ica.plot_components()
+#
+#     # Find the ICA components that match the EOG pattern
+#     eog_indices, eog_scores = ica.find_bads_eog(raw_filtered)
+#     # ica.plot_scores(eog_scores)
+#
+#     # Inspect the identified components
+#     # ica.plot_properties(raw_filtered, picks=eog_indices)
+#
+#     # If you want to remove the identified EOG artifacts
+#     ica.exclude = eog_indices
+#     ica.apply(raw_filtered)
+#
+#     # Plot the cleaned data
+#     # raw_filtered.plot()
+#
+#     # save ICA object
+#     with open('ica.pickle', 'wb') as f:
+#         pickle.dump(ica, f)
+#
+#     return ica.get_sources(raw_filtered).get_data()
 
 ############### ARAN CODE
 
