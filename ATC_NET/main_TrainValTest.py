@@ -178,6 +178,10 @@ def train(dataset_conf, train_conf, results_path):
             print("X_val shape:", X_val.shape)
             print("y_train shape:", y_train_onehot.shape)
             print("y_val shape:", y_val_onehot.shape)
+            # X_train shape: (3659, 1, 128, 512)
+            # X_val shape: (915, 1, 128, 512)
+            # y_train shape: (3659, 2)
+            # y_val shape: (915, 2)
 
             # Verify the class distribution in the training and validation sets
             print("Training set class distribution:", Counter(np.argmax(y_train_onehot, axis=1)))
@@ -413,7 +417,7 @@ def run():
     if dataset == 'ELIS':
         in_samples = 512
         n_channels = 128
-        n_sub = 2
+        n_sub = 1
         n_classes = 2
         classes_labels = ['click', 'nothing']
         data_path = 'Zurs_Dataset/'

@@ -306,7 +306,7 @@ def load_ELIS_data(data_path, subject, training, all_trials=True):
         X = np.load('Zurs_Dataset/subjects/BIJVZD/SMOTEed_eeg_data.npy')
         y = np.load('Zurs_Dataset/subjects/BIJVZD/SMOTEed_eeg_labels.npy')
     else:
-        X = np.load('Zurs_Dataset/subjects/EFFEUS/SMOTEed_eeg_labels.npy')
+        X = np.load('Zurs_Dataset/subjects/EFFEUS/SMOTEed_eeg_data.npy')
         y = np.load('Zurs_Dataset/subjects/EFFEUS/SMOTEed_eeg_labels.npy')
 
     return X, y
@@ -523,12 +523,17 @@ def get_data(path, subject, dataset = 'BCI2a', classes_labels = 'all', LOSO = Fa
     # Prepare training data
     N_tr, N_ch, T = X_train.shape
     X_train = X_train.reshape(N_tr, 1, N_ch, T)
-    y_train_onehot = to_categorical(y_train)
 
     # Prepare testing data
-    N_tr, N_ch, T = X_test.shape 
+    N_tr, N_ch, T = X_test.shape
     X_test = X_test.reshape(N_tr, 1, N_ch, T)
-    y_test_onehot = to_categorical(y_test)    
+
+    if(dataset=='ELIS'):
+        y_train_onehot = y_train
+        y_test_onehot = y_test
+    else:
+        y_train_onehot = to_categorical(y_train)
+        y_test_onehot = to_categorical(y_test)
     
     # Standardize the data
     if isStandard:
