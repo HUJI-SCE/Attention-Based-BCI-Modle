@@ -306,7 +306,7 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
 
     # Train the model
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=3, batch_size=32,
+    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=100, batch_size=32,
                         callbacks=[early_stopping])
     # Evaluate the model
     loss, accuracy, precision, recall = model.evaluate(X_val, y_val)
@@ -510,8 +510,8 @@ if __name__ == '__main__':
     test_subjects = ['EFFEUS']
     # Test the model on the remaining subjects
     for subject in test_subjects:
-        Z = np.load(f'subjects/{subject}/SMOTEed_eeg_data.npy')
-        w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels.npy')
+        Z = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
+        w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
         print(Z.shape)
         print(w.shape)
         test(model, Z, w, subject)
