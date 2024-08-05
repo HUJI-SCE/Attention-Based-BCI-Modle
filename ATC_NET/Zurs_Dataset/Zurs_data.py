@@ -4,11 +4,10 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io
-from imblearn.over_sampling import SMOTE
 
 import models
 from scipy.io import loadmat
-#from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import SMOTE
 from os.path import join
 
 import shutil
@@ -69,17 +68,29 @@ def preprocess(subject, trial_count=40, sound_count=30):
 
     np.save(f'ordered_clips_{subject}.npy', clip_eeg)
 
+def detect_mat_version(file_path):
+    """Detect the version of a .mat file."""
+    with open(file_path, 'rb') as f:
+        header = f.read(128).decode('latin1')
+        if 'MATLAB 5.0 MAT-file' in header:
+            return 5
+        elif 'HDF5' in header:
+            return 7
+        else:
+            raise ValueError("Unknown .mat file version")
 
 def create_clicks_array(subject, trial_count=40):
-    behavioral_path = join('subjects', f'{subject}')
+    behavioral_path = join('subjects', f'{subject}', f'ShortClipTwoBack_res_sbj{subject}.mat')
+
     resptms, results, aborted, trknms, trkorder, dettms, corr = load_behavioral_data(subject, behavioral_path)
     # Create a 2D array with 40 rows and 256*60 columns for sound samples
     #  40 trials
     #  256 time samples per 2 seconds, 120 seconds per trial
     response_labels = np.zeros((trial_count, 256 * 60))
-    mat_v7 = False
+
+    mat = detect_mat_version(behavioral_path)
     click_counter = 0
-    if mat_v7:
+    if mat==7:
         for trial_idx, trial in enumerate(resptms):
             for click in trial: # time of spacebar clicked in this trial
                 sample_index = round(click * 128)  # for every 2 sec, 256 samples. sampling rate = 128
@@ -102,11 +113,10 @@ def create_clicks_array(subject, trial_count=40):
     response_labels = response_labels_reordered
     np.save(f'ordered_response_labels_{subject}.npy', response_labels)
 
-def load_behavioral_data(subject):
+def load_behavioral_data(subject, mat_file_path):
 
-    mat_file_path = join(subject, f'ShortClipTwoBack_res_sbj{subject}.mat')
-    mat_is_v7 = False
-    if mat_is_v7:
+    mat = detect_mat_version(mat_file_path)
+    if mat==7:
         import h5py
         # Open the MATLAB v7.3 file
         with h5py.File(mat_file_path, 'r') as mat_data:
@@ -343,7 +353,7 @@ def interpolate_clicks(clicks, target_length):
 
 
 def interpolate_data(subject):
-    global X, y, total_sounds
+    global total_sounds
     eeg = np.load(f'ordered_clips_{subject}.npy')
     clicks_array = np.load(f'ordered_response_labels_{subject}.npy')
     # EEFFOUS: eeg[60][40][128][256] clicks_array[40][15360]
@@ -364,7 +374,6 @@ def interpolate_data(subject):
     label_1_count = 0
     label_0_count = 0
 
-    total_count=0
     for trial in range(total_trials):
         # Flatten the eeg for the current trial to be [total_samples, electrode_num]
         eeg_flat = eeg[:, trial, :, :].reshape(total_sounds * time_samples, electrode_num)
@@ -395,24 +404,22 @@ def interpolate_data(subject):
             y.append(label)
             segment_times += 1
 
-        print("Original data has a total of ", total_count/2, " clicks")
-        print("segmented ", segment_times, " times")
-        print("labeled 1 ", label_1_count, " times")
-        print("labeled 0 ", label_0_count, " times")
-        # Convert to numpy arrays
-        X = np.array(X)
-        y = np.array(y)
-        np.save(f'interpolated_ordered_clips_{subject}.npy', X)
-        np.save(f'interpolated_ordered_response_labels_{subject}.npy', y)
+    print("segmented ", segment_times, " times")
+    print("labeled 1 ", label_1_count, " times")
+    print("labeled 0 ", label_0_count, " times")
+    # Convert to numpy arrays
+    X = np.array(X)
+    y = np.array(y)
+    np.save(f'interpolated_ordered_clips_{subject}.npy', X)
+    np.save(f'interpolated_ordered_response_labels_{subject}.npy', y)
 
 
 def SMOTE_data(subject):
     # EEFFOUS X[2400][1][128][512] y[2400]
     # BIJVZD  X[2400][1][128][512] y[2400]
-    clicks_array = np.load(f'ordered_response_labels_{subject}.npy')
 
-    X = np.load(f'elaborated_eeg_data_{subject}.npy')
-    y = np.load(f'elaborated_labels_{subject}.npy')
+    X = np.load(f'interpolated_ordered_clips_{subject}.npy')
+    y = np.load(f'interpolated_ordered_response_labels_{subject}.npy')
     # Reshape X to a 2D array for SMOTE
     X = X.reshape((X.shape[0], -1))
     # Apply SMOTE
@@ -426,24 +433,10 @@ def SMOTE_data(subject):
     print("Original dataset shape:", Counter(y))
     print("Resampled dataset shape:", Counter(np.argmax(y_resampled, axis=1)))
 
-    return X_resampled, y_resampled
-    np.save("SMOTEed_eeg_data", X_resampled)
-    np.save("SMOTEed_eeg_labels", y_resampled)
+    np.save(f"subjects/{subject}/SMOTEed_eeg_data_{subject}.npy", X_resampled)
+    np.save(f"subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy", y_resampled)
 
 
-def load_data(subject_list):
-    X = []
-    y = []
-    for subject in subject_list:
-        subject_data = np.load(f'interpolated_ordered_clips_{subject}.npy')
-        subject_labels = np.load(f'interpolated_ordered_response_labels_{subject}.npy')
-        X.append(subject_data)
-        y.append(subject_labels)
-
-    X = np.concatenate(X, axis=0)
-    y = np.concatenate(y, axis=0)
-
-    return X, y
 
 if __name__ == '__main__':
 
@@ -458,8 +451,10 @@ if __name__ == '__main__':
     n_subjects = 15
     total_sounds = 60
 
-    subject_list = ['BIJVZD', 'EFFEUS', 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
-                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI']
+    subject_list = ['BIJVZD', 'EFFEUS'
+        #, 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
+#                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
+                                       ]
     results_folder = 'results'
     model_path = 'trained_model.h5'
     training_epochs = 1
@@ -473,6 +468,17 @@ if __name__ == '__main__':
             create_clicks_array(subject)
             interpolate_data(subject)
             SMOTE_data(subject)
+            if os.path.exists(f'ordered_clips_{subject}.npy'):
+                os.remove(f'ordered_clips_{subject}.npy')
+            if os.path.exists(f'ordered_response_labels_{subject}.npy'):
+                os.remove(f'ordered_response_labels_{subject}.npy')
+            if os.path.exists(f'interpolated_ordered_clips_{subject}.npy'):
+                os.remove(f'interpolated_ordered_clips_{subject}.npy')
+            if os.path.exists(f'interpolated_ordered_response_labels_{subject}.npy'):
+                os.remove(f'interpolated_ordered_response_labels_{subject}.npy')
+
+
+
     # Create results folder
     if os.path.exists(results_folder):
         shutil.rmtree(results_folder)
@@ -491,8 +497,8 @@ if __name__ == '__main__':
     X_train, y_train = [], []
     train_subjects = ['BIJVZD']
     for subject in train_subjects:
-        X = np.load(f'subjects/{subject}/SMOTEed_eeg_data.npy')
-        y = np.load(f'subjects/{subject}/SMOTEed_eeg_labels.npy')
+        X = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
+        y = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
         X_train.append(X)
         y_train.append(y)
     X_train = np.concatenate(X_train, axis=0)
@@ -509,35 +515,3 @@ if __name__ == '__main__':
         print(Z.shape)
         print(w.shape)
         test(model, Z, w, subject)
-
-#     test_subjects = random.sample(subject_list, 3)
-#     train_subjects = [sub for sub in subject_list if sub not in test_subjects]
-#
-#     X_train, y_train = load_data(train_subjects)
-#     X_test, y_test = load_data(test_subjects)
-#
-#     X_train, y_train = SMOTE_data(X_train, y_train)
-#
-#     model = models.create_model()
-#     plot_model(model, show_shapes=True, show_layer_names=True, to_file='model_structure.png')
-#
-#     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-#     history = model.fit(X_train, y_train, epochs=100, batch_size=128, validation_split=0.2, callbacks=[early_stopping])
-#
-#     plt.plot(history.history['loss'], label='loss')
-#     plt.plot(history.history['val_loss'], label='val_loss')
-#     plt.legend()
-#     plt.show()
-#
-#     model.save('eeg_model.h5')
-#
-#     y_pred = model.predict(X_test)
-#     y_pred_classes = np.argmax(y_pred, axis=1)
-#     y_true = np.argmax(y_test, axis=1)
-#
-#     cm = confusion_matrix(y_true, y_pred_classes)
-#     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-#     disp.plot()
-#     plt.show()
-#
-#     print(classification_report(y_true, y_pred_classes))
