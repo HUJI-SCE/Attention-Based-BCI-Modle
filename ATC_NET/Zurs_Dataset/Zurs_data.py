@@ -314,7 +314,7 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
     print(f'Validation accuracy: {accuracy}')
 
     # Assuming `model` is your trained model
-    plot_model(model, to_file='model_structure.png', show_shapes=True, show_layer_names=True)
+    # plot_model(model, to_file='model_structure.png', show_shapes=True, show_layer_names=True)
 
     # Assuming your validation data is X_val and y_val
     y_pred = model.predict(X_val)
