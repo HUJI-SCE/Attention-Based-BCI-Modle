@@ -1,40 +1,37 @@
-from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
-from tensorflow.keras.utils import plot_model
+import os
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
-from keras.callbacks import EarlyStopping
 import scipy.io
-from keras.models import load_model
+from imblearn.over_sampling import SMOTE
 
 import models
-from sklearn.model_selection import train_test_split
 from scipy.io import loadmat
 #from imblearn.over_sampling import SMOTE
 from os.path import join
-from tensorflow.keras.metrics import Precision, Recall
+
+import shutil
 from collections import Counter
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
+from keras.models import load_model
+from keras.callbacks import EarlyStopping
+from keras.metrics import Precision, Recall
+from keras.utils import plot_model
 
 
-def preprocess(subject_count=15, trial_count=40, sound_count=30, repeat_count=2):
+def preprocess(subject, trial_count=40, sound_count=30):
     """
     Collects all eeg clips form all subjects, orders them, and adds labels of space-bar presses.
 
     First we establish teh order of the clip presentation - all subjects get the
     same clips in the same order, so needs to be done only once.
 
-    :param subject_count: how many subjects
     :param trial_count: how many trials, per subject
     :param sound_count: how many sounds are presented to each subject
-    :param repeat_count: how many times each sound is repeated, per trial
     :return: an array of X-y dataset, per subject: [shape: X:(15, 40, 128, 256), y:(40, 1, 256)]
     """
-
-    subject_list = [
-        'BIJVZD',
-        #'EFFEUS'
-        # ,'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
-    # 'TUZEZT', 'UOBXJO', 'WWDVDF' 'YMKSWS', 'ZLIDEI']
-        ]
 
     '''establish the order of the clips'''
     # get the order of the sounds
@@ -56,81 +53,60 @@ def preprocess(subject_count=15, trial_count=40, sound_count=30, repeat_count=2)
     # decrease 1 to convert to index range [0, 59]
     clip_order -= 1
 
-    for subject in subject_list:
+    '''collect clips'''
+    # stack eeg's for all sounds per subject : [resulting shape: (30, 80, 128, 256)]
+    clip_paths = [join('subjects',f'{subject}', f'{subject}_clip{i + 1}.mat') for i in range(sound_count)]
+    clip_eeg = np.stack(
+        [loadmat(clip_paths[i])['clipeeg'].transpose(2, 1, 0)
+         for i in range(len(clip_paths))])
 
-        '''collect clips'''
-        # stack eeg's for all sounds per subject : [resulting shape: (30, 80, 128, 256)]
-        clip_paths = [join('subjects',f'{subject}', f'{subject}_clip{i + 1}.mat') for i in range(sound_count)]
-        clip_eeg = np.stack(
-            [loadmat(clip_paths[i])['clipeeg'].transpose(2, 1, 0)
-             for i in range(len(clip_paths))])
+    '''order the clips'''
+    # every slice of the form ordered[:, i, :, :] should be of the same trial: [resulting shape: (60, 40, 128, 256)]
+    clip_eeg = np.concatenate([clip_eeg[:, ::2, :, :], clip_eeg[:, 1::2, :, :]], axis=0)
 
-        '''order the clips'''
-        # every slice of the form ordered[:, i, :, :] should be of the same trial: [resulting shape: (60, 40, 128, 256)]
-        clip_eeg = np.concatenate([clip_eeg[:, ::2, :, :], clip_eeg[:, 1::2, :, :]], axis=0)
+    for i in range(clip_order.shape[0]):
+        clip_eeg[:, i, :, :] = clip_eeg[clip_order[i], i, :, :]
 
-        for i in range(clip_order.shape[0]):
-            clip_eeg[:, i, :, :] = clip_eeg[clip_order[i], i, :, :]
+    np.save(f'ordered_clips_{subject}.npy', clip_eeg)
 
-    np.save('ordered_clips.npy', clip_eeg)
 
-def create_clicks_array(subject_count=15, trial_count=40, sound_count=30, repeat_count=2):
-
-    subject_list = ['BIJVZD']  # , 'BIJVZD', 'EFFEUS', 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
-    # 'TUZEZT', 'UOBXJO', 'WWDVDF' 'YMKSWS', 'ZLIDEI']
-
-    #TODO: create a list for subject in subject_list
-    subject = subject_list[0]
+def create_clicks_array(subject, trial_count=40):
     behavioral_path = join('subjects', f'{subject}')
-
-    resptms, results, aborted, trknms, trkorder, dettms, corr = load_behavioral_data(behavioral_path)
+    resptms, results, aborted, trknms, trkorder, dettms, corr = load_behavioral_data(subject, behavioral_path)
     # Create a 2D array with 40 rows and 256*60 columns for sound samples
     #  40 trials
     #  256 time samples per 2 seconds, 120 seconds per trial
     response_labels = np.zeros((trial_count, 256 * 60))
-    mat_v7=False
+    mat_v7 = False
     click_counter = 0
-    if(mat_v7==True):
-        for trial_idx, trial in enumerate(resptms):  # for every trial
-
-            for click in trial:  # time of spacebar clicked in this trial
+    if mat_v7:
+        for trial_idx, trial in enumerate(resptms):
+            for click in trial: # time of spacebar clicked in this trial
                 sample_index = round(click * 128)  # for every 2 sec, 256 samples. sampling rate = 128
                 response_labels[trial_idx][sample_index] = 1
                 click_counter+=1
-                print(f"spacebar_clicked at {click}, mapped to {sample_index}")
-
     else:
-        for trial_idx in range(resptms.shape[0]):  # for every trial
-            for click in resptms[trial_idx][0]:  # time of spacebar clicked in this trial
-                sample_index = round(click[0] * 128)  # for every 2 sec, 256 samples. sampling rate = 128
-                print(f"spacebar_clicked at {click[0]}, mapped to {sample_index}")
+        for trial_idx in range(resptms.shape[0]):
+            for click in resptms[trial_idx][0]:
+                sample_index = round(click[0] * 128)
                 response_labels[trial_idx][sample_index] = 1
                 click_counter+=1
+
     response_labels_reordered = np.zeros((trial_count, 256 * 60))
     print(f'Counted {click_counter} clicks in resptms')
+
     # Reorder the trial dimension
     for trkorder_idx, numerical_idx in enumerate(trkorder):
         response_labels_reordered[int(numerical_idx) - 1] = response_labels[trkorder_idx]
     # Update the response_labels array
     response_labels = response_labels_reordered
-
-    click_counter=0
-    for trial in response_labels:
-        for click in trial:
-            if click==1:
-                click_counter+=1
-
-    print(f'Counted {click_counter} clicks in ordered_response_labels')
-    np.save('ordered_response_labels.npy', response_labels)
+    np.save(f'ordered_response_labels_{subject}.npy', response_labels)
 
 def load_behavioral_data(subject):
-    # Load the .mat file
-    subject_list = ['BIJVZD']  # , 'BIJVZD', 'EFFEUS'. 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
-    # 'TUZEZT', 'UOBXJO', 'WWDVDF' 'YMKSWS', 'ZLIDEI']
-    mat_file_path = join(f'{subject}', f'ShortClipTwoBack_res_sbj{subject_list[0]}.mat')
 
+    mat_file_path = join(subject, f'ShortClipTwoBack_res_sbj{subject}.mat')
     mat_is_v7 = False
-    if (mat_is_v7):
+    if mat_is_v7:
         import h5py
         # Open the MATLAB v7.3 file
         with h5py.File(mat_file_path, 'r') as mat_data:
@@ -249,18 +225,14 @@ def segment_eeg_data_with_overlap(eeg, labels, window_duration, overlap, n_class
     return segmented_data, segmented_labels
 
 
-
-def test(model, Z, w):
+def test(model, Z, w, subject):
     # Verify the class distribution in the testing set
     print("Testing set class distribution:", Counter(np.argmax(w, axis=1)))
 
     # Evaluate the model on the testing data
     loss, accuracy, precision, recall = model.evaluate(Z, w)
-    print(f'Testing loss: {loss},'
-          f' Testing accuracy: {accuracy},'
-          f' Testing precision: {precision},'
-          f' Testing recall: {recall}'
-          )
+    print(
+        f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
 
     # Predict the labels for the testing set
     y_pred = model.predict(Z)
@@ -271,7 +243,17 @@ def test(model, Z, w):
     cm = confusion_matrix(y_true_classes, y_pred_classes)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
     disp.plot()
-    plt.show()
+    plt.savefig(os.path.join(results_folder, f'confusion_matrix_{subject}.png'))
+    plt.close()
+
+    # Save metrics and confusion matrix
+    with open(os.path.join(results_folder, f'results_{subject}.txt'), 'w') as f:
+        f.write(
+            f'Testing loss: {loss}\nTesting accuracy: {accuracy}\nTesting precision: {precision}\nTesting recall: {recall}\n')
+        f.write("Confusion Matrix:\n")
+        f.write(np.array2string(cm))
+        f.write("\nClassification Report:\n")
+        f.write(classification_report(y_true_classes, y_pred_classes))
 
 def load_trained_model(model_path):
     return load_model(model_path)
@@ -329,13 +311,14 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
     y_pred_classes = np.argmax(y_pred, axis=1)  # Get the predicted classes
     y_true = np.argmax(y_val, axis=1)           # Get the true classes
 
+
     cm = confusion_matrix(y_true, y_pred_classes)
     print("Confusion Matrix:\n", cm)
     print("Classification Report:\n", classification_report(y_true, y_pred_classes))
     return model
 
 
-def interpolate_eeg(data, original_length, target_length):
+def interpolate_eeg(data, target_length):
     interpolated_data = np.zeros((data.shape[0], data.shape[1], data.shape[2], target_length))
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
@@ -359,16 +342,18 @@ def interpolate_clicks(clicks, target_length):
     return interpolated_clicks
 
 
-def interpolate_data():
+def interpolate_data(subject):
     global X, y, total_sounds
-    eeg = np.load('ordered_clips.npy')
+    eeg = np.load(f'ordered_clips_{subject}.npy')
+    clicks_array = np.load(f'ordered_response_labels_{subject}.npy')
     # EEFFOUS: eeg[60][40][128][256] clicks_array[40][15360]
     # BIJVZD:  eeg[60][40][128][256] clicks_array[40][15360]
-    clicks_array = np.load('ordered_response_labels.npy')
 
     # Apply interpolation to double the number of time samples
-    eeg_interpolated = interpolate_eeg(eeg, original_samples, target_samples)
+    eeg_interpolated = interpolate_eeg(eeg, target_samples)
+
     clicks_array_interpolated = interpolate_clicks(clicks_array, target_samples * total_sounds)
+
     eeg = eeg_interpolated
     clicks_array = clicks_array_interpolated
     # Initialize the inputs and labels for the model
@@ -387,17 +372,6 @@ def interpolate_data():
         # Get the corresponding clicks array for the trial
         clicks = clicks_array[trial]
 
-        click_counter=0
-        click_indices=[]
-        for click_idx in range(len(clicks)):
-            if clicks[click_idx]==1:
-                click_counter+=1
-                click_indices.append(click_idx)
-
-
-        print(f'Counted {click_counter/2} clicks in trial #{trial}')
-        print(f'indices of clicks are in: {click_indices}')
-        total_count+=click_counter
         # for 60 2-sec sounds sounded in a trial (in total 512*60) step every 2 seconds (512 time samples) and label:
         end = eeg_flat.shape[0]
         step = in_samples
@@ -421,76 +395,149 @@ def interpolate_data():
             y.append(label)
             segment_times += 1
 
-    print("Original data has a total of ", total_count/2, " clicks")
-    print("segmented ", segment_times, " times")
-    print("labeled 1 ", label_1_count, " times")
-    print("labeled 0 ", label_0_count, " times")
-    # Convert to numpy arrays
-    X = np.array(X)
-    y = np.array(y)
-    np.save('elaborated_eeg_data.npy', X)
-    np.save('elaborated_labels.npy', y)
+        print("Original data has a total of ", total_count/2, " clicks")
+        print("segmented ", segment_times, " times")
+        print("labeled 1 ", label_1_count, " times")
+        print("labeled 0 ", label_0_count, " times")
+        # Convert to numpy arrays
+        X = np.array(X)
+        y = np.array(y)
+        np.save(f'interpolated_ordered_clips_{subject}.npy', X)
+        np.save(f'interpolated_ordered_response_labels_{subject}.npy', y)
 
 
-# def SMOTE_data():
-#     global X, y, X_resampled, y_resampled
-#     X = np.load('elaborated_eeg_data.npy')
-#     y = np.load('elaborated_labels.npy')
-#
-#     print(X.shape)
-#     print(y.shape)
-#     # EEFFOUS X[2400][1][128][512] y[2400]
-#     # BIJVZD  X[2400][1][128][512] y[2400]
-#
-#     # Reshape X to a 2D array for SMOTE
-#     X = X.reshape((X.shape[0], -1))
-#     # Apply SMOTE
-#     smote = SMOTE(sampling_strategy='auto', random_state=42)
-#     X_resampled, y_resampled = smote.fit_resample(X, y)
-#     # Convert y_resampled back to one-hot encoding
-#     y_resampled = np.eye(2)[y_resampled]
-#     # Reshape X_resampled back to its original shape
-#     X_resampled = X_resampled.reshape((X_resampled.shape[0], 1, 128, 512))
-#     # Verify the new class distribution
-#     print("Original dataset shape:", Counter(y))
-#     print("Resampled dataset shape:", Counter(np.argmax(y_resampled, axis=1)))
-#     np.save("SMOTEed_eeg_data", X_resampled)
-#     np.save("SMOTEed_eeg_labels", y_resampled)
+def SMOTE_data(subject):
+    # EEFFOUS X[2400][1][128][512] y[2400]
+    # BIJVZD  X[2400][1][128][512] y[2400]
+    clicks_array = np.load(f'ordered_response_labels_{subject}.npy')
 
+    X = np.load(f'elaborated_eeg_data_{subject}.npy')
+    y = np.load(f'elaborated_labels_{subject}.npy')
+    # Reshape X to a 2D array for SMOTE
+    X = X.reshape((X.shape[0], -1))
+    # Apply SMOTE
+    smote = SMOTE(sampling_strategy='auto', random_state=42)
+    X_resampled, y_resampled = smote.fit_resample(X, y)
+    # Convert y_resampled back to one-hot encoding
+    y_resampled = np.eye(2)[y_resampled]
+    # Reshape X_resampled back to its original shape
+    X_resampled = X_resampled.reshape((X_resampled.shape[0], 1, 128, 512))
+    # Verify the new class distribution
+    print("Original dataset shape:", Counter(y))
+    print("Resampled dataset shape:", Counter(np.argmax(y_resampled, axis=1)))
+
+    return X_resampled, y_resampled
+    np.save("SMOTEed_eeg_data", X_resampled)
+    np.save("SMOTEed_eeg_labels", y_resampled)
+
+
+def load_data(subject_list):
+    X = []
+    y = []
+    for subject in subject_list:
+        subject_data = np.load(f'interpolated_ordered_clips_{subject}.npy')
+        subject_labels = np.load(f'interpolated_ordered_response_labels_{subject}.npy')
+        X.append(subject_data)
+        y.append(subject_labels)
+
+    X = np.concatenate(X, axis=0)
+    y = np.concatenate(y, axis=0)
+
+    return X, y
 
 if __name__ == '__main__':
-    # Constants
+
+    # Update paths and model configuration here
     n_classes = 2
     in_chans = 128
     original_samples = 256
     in_samples = 512
     target_samples = 512
-    tcn_kernel= 4
+    tcn_kernel = 4
     n_windows = 5
+    n_subjects = 15
     total_sounds = 60
-    # Parameter: number of time samples corresponding to 1 second
-    param_samples = 128  # Adjust this to change the time before click for labeling
 
-#    preprocess()
-#    create_clicks_array()
-#    interpolate_data()
-#    SMOTE_data()
+    subject_list = ['BIJVZD', 'EFFEUS', 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
+                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI']
+    results_folder = 'results'
+    model_path = 'trained_model.h5'
+    training_epochs = 1
+    batch_size = 128
 
-    model_path = 'model1.h5'
-    # Parameters
-    training = True
-    if(training):
-        X = np.load('subjects/BIJVZD/SMOTEed_eeg_data.npy')
-        y = np.load('subjects/BIJVZD/SMOTEed_eeg_labels.npy')
-        model = train(X,y, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
-        # Save the model
-        model.save(model_path)
-        print(f'Model saved to {model_path}')
-    testing = True
-    if(testing):
-        loaded_model = load_trained_model(model_path)
-        Z = np.load('subjects/EFFEUS/SMOTEed_eeg_data.npy')
-        w = np.load('subjects/EFFEUS/SMOTEed_eeg_labels.npy')
+
+    do_preprocess = True
+    if do_preprocess:
+        for subject in subject_list:
+            preprocess(subject)
+            create_clicks_array(subject)
+            interpolate_data(subject)
+            SMOTE_data(subject)
+    # Create results folder
+    if os.path.exists(results_folder):
+        shutil.rmtree(results_folder)
+    os.makedirs(results_folder)
+
+    # Randomly split the subjects into training and testing sets
+    random.shuffle(subject_list)
+    train_subjects = subject_list[:len(subject_list) // 2]
+    test_subjects = subject_list[len(subject_list) // 2:]
+
+    print(f'Training on subjects: {train_subjects}')
+    print(f'Testing on subjects: {test_subjects}')
+
+
+    # Load and concatenate training data
+    X_train, y_train = [], []
+    train_subjects = ['BIJVZD']
+    for subject in train_subjects:
+        X = np.load(f'subjects/{subject}/SMOTEed_eeg_data.npy')
+        y = np.load(f'subjects/{subject}/SMOTEed_eeg_labels.npy')
+        X_train.append(X)
+        y_train.append(y)
+    X_train = np.concatenate(X_train, axis=0)
+    y_train = np.concatenate(y_train, axis=0)
+
+    model = train(X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
+    model.save(model_path)
+    print(f'Model saved to {model_path}')
+    test_subjects = ['EFFEUS']
+    # Test the model on the remaining subjects
+    for subject in test_subjects:
+        Z = np.load(f'subjects/{subject}/SMOTEed_eeg_data.npy')
+        w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels.npy')
         print(Z.shape)
         print(w.shape)
-        test(loaded_model,Z,w)
+        test(model, Z, w, subject)
+
+#     test_subjects = random.sample(subject_list, 3)
+#     train_subjects = [sub for sub in subject_list if sub not in test_subjects]
+#
+#     X_train, y_train = load_data(train_subjects)
+#     X_test, y_test = load_data(test_subjects)
+#
+#     X_train, y_train = SMOTE_data(X_train, y_train)
+#
+#     model = models.create_model()
+#     plot_model(model, show_shapes=True, show_layer_names=True, to_file='model_structure.png')
+#
+#     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+#     history = model.fit(X_train, y_train, epochs=100, batch_size=128, validation_split=0.2, callbacks=[early_stopping])
+#
+#     plt.plot(history.history['loss'], label='loss')
+#     plt.plot(history.history['val_loss'], label='val_loss')
+#     plt.legend()
+#     plt.show()
+#
+#     model.save('eeg_model.h5')
+#
+#     y_pred = model.predict(X_test)
+#     y_pred_classes = np.argmax(y_pred, axis=1)
+#     y_true = np.argmax(y_test, axis=1)
+#
+#     cm = confusion_matrix(y_true, y_pred_classes)
+#     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+#     disp.plot()
+#     plt.show()
+#
+#     print(classification_report(y_true, y_pred_classes))
