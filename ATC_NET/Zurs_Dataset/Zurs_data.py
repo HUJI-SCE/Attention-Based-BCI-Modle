@@ -249,21 +249,53 @@ def test(model, Z, w, subject):
     y_pred_classes = np.argmax(y_pred, axis=1)
     y_true_classes = np.argmax(w, axis=1)
 
-    # Generate and display the confusion matrix
-    cm = confusion_matrix(y_true_classes, y_pred_classes)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    disp.plot()
-    plt.savefig(os.path.join(results_folder, f'confusion_matrix_{subject}.png'))
+    save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
+
+
+def draw_learning_curves(history, subjects):
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('Model accuracy - validation set: ', str(subjects))
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'val'], loc='upper left')
+    plt.savefig('accuracy_validation' + '.png')
     plt.close()
 
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model loss - validation set: ' + str(subjects))
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'val'], loc='upper left')
+    plt.savefig('loss_validation' + '.png')
+    print('saved graphs for subject training validation')
+    plt.close()
+
+def save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes, stage):
+    cm = save_confusion_mat(subject, y_pred_classes, y_true_classes)
     # Save metrics and confusion matrix
-    with open(os.path.join(results_folder, f'results_{subject}.txt'), 'w') as f:
+    with open(os.path.join(results_folder, f'{stage}_results_{subject}.txt'), 'w') as f:
         f.write(
-            f'Testing loss: {loss}\nTesting accuracy: {accuracy}\nTesting precision: {precision}\nTesting recall: {recall}\n')
+            f'{stage} loss: {loss}\n{stage} accuracy: {accuracy}\n{stage} precision: {precision}\n{stage} recall: {recall}\n')
         f.write("Confusion Matrix:\n")
         f.write(np.array2string(cm))
         f.write("\nClassification Report:\n")
         f.write(classification_report(y_true_classes, y_pred_classes))
+
+
+def save_confusion_mat(subject, y_pred_classes, y_true_classes):
+    # Generate and display the confusion matrix
+    cm = confusion_matrix(y_true_classes, y_pred_classes)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    disp.plot()
+    if subject:
+        plt.savefig(os.path.join(results_folder, f'confusion_matrix_{subject}.png'))
+    else:
+        plt.savefig(os.path.join(results_folder, f'train_validation_confusion_matrix.png'))
+    plt.close()
+    return cm
+
 
 def load_trained_model(model_path):
     return load_model(model_path)
@@ -290,15 +322,15 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
                            ])
 
     # Split the data into training and validation sets
-    print(X.shape)
-    print(y.shape)
+    # print(X.shape)
+    # print(y.shape)
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Verify the new shapes
-    print("X_train shape:", X_train.shape)
-    print("X_val shape:", X_val.shape)
-    print("y_train shape:", y_train.shape)
-    print("y_val shape:", y_val.shape)
+    # # Verify the new shapes
+    # print("X_train shape:", X_train.shape)
+    # print("X_val shape:", X_val.shape)
+    # print("y_train shape:", y_train.shape)
+    # print("y_val shape:", y_val.shape)
 
     # Verify the class distribution in the training and validation sets
     print("Training set class distribution:", Counter(np.argmax(y_train, axis=1)))
@@ -321,10 +353,14 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
     y_pred_classes = np.argmax(y_pred, axis=1)  # Get the predicted classes
     y_true = np.argmax(y_val, axis=1)           # Get the true classes
 
-
-    cm = confusion_matrix(y_true, y_pred_classes)
-    print("Confusion Matrix:\n", cm)
-    print("Classification Report:\n", classification_report(y_true, y_pred_classes))
+    print('Plot Learning Curves ....... ')
+    draw_learning_curves(history, train_subjects)
+    save_metrics(accuracy, loss, precision, recall,
+                 subject="", y_pred_classes=y_pred_classes,
+                 y_true_classes=y_true, stage="training")
+    # cm = confusion_matrix(y_true, y_pred_classes)
+    # print("Confusion Matrix:\n", cm)
+    # print("Classification Report:\n", classification_report(y_true, y_pred_classes))
     return model
 
 
@@ -452,10 +488,9 @@ if __name__ == '__main__':
     total_sounds = 60
 
     subject_list = ['BIJVZD', 'EFFEUS'
-        #, 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
-#                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
-                                       ]
-    results_folder = 'results'
+                    #, 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
+                    #                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
+                    ]
     model_path = 'trained_model.h5'
     training_epochs = 1
     batch_size = 128
@@ -478,16 +513,19 @@ if __name__ == '__main__':
                 os.remove(f'interpolated_ordered_response_labels_{subject}.npy')
 
 
+    # Randomly split the subjects into training and testing sets
+    random.shuffle(subject_list)
+    train_subjects = subject_list[:len(subject_list) // 2]
+    test_subjects = subject_list[len(subject_list) // 2:]
+    train_subjects = ['BIJVZD']
+    test_subjects = ['EFFEUS']
 
+    results_folder = 'results_' + str(test_subjects)
     # Create results folder
     if os.path.exists(results_folder):
         shutil.rmtree(results_folder)
     os.makedirs(results_folder)
 
-    # Randomly split the subjects into training and testing sets
-    random.shuffle(subject_list)
-    train_subjects = subject_list[:len(subject_list) // 2]
-    test_subjects = subject_list[len(subject_list) // 2:]
 
     print(f'Training on subjects: {train_subjects}')
     print(f'Testing on subjects: {test_subjects}')
@@ -495,7 +533,6 @@ if __name__ == '__main__':
 
     # Load and concatenate training data
     X_train, y_train = [], []
-    train_subjects = ['BIJVZD']
     for subject in train_subjects:
         X = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
         y = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
@@ -507,7 +544,6 @@ if __name__ == '__main__':
     model = train(X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
     model.save(model_path)
     print(f'Model saved to {model_path}')
-    test_subjects = ['EFFEUS']
     # Test the model on the remaining subjects
     for subject in test_subjects:
         Z = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
