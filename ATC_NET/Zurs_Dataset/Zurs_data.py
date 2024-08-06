@@ -255,7 +255,7 @@ def test(model, Z, w, subject):
 def draw_learning_curves(history, subjects):
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
-    plt.title('Model accuracy - validation set: ', str(subjects))
+    plt.title('Model accuracy: ', subjects)
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'val'], loc='upper left')
@@ -264,7 +264,7 @@ def draw_learning_curves(history, subjects):
 
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
-    plt.title('Model loss - validation set: ' + str(subjects))
+    plt.title('Model loss: ' + subjects)
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'val'], loc='upper left')
@@ -301,7 +301,7 @@ def load_trained_model(model_path):
     return load_model(model_path)
 
 
-def train(X,y, in_chans, in_samples, tcn_kernel):
+def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
     global history
     # Define and compile the model with the new window size
     model = models.ATCNet_(
@@ -354,7 +354,7 @@ def train(X,y, in_chans, in_samples, tcn_kernel):
     y_true = np.argmax(y_val, axis=1)           # Get the true classes
 
     print('Plot Learning Curves ....... ')
-    draw_learning_curves(history, train_subjects)
+    draw_learning_curves(history, subjects)
     save_metrics(accuracy, loss, precision, recall,
                  subject="", y_pred_classes=y_pred_classes,
                  y_true_classes=y_true, stage="training")
@@ -541,7 +541,7 @@ if __name__ == '__main__':
     X_train = np.concatenate(X_train, axis=0)
     y_train = np.concatenate(y_train, axis=0)
 
-    model = train(X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
+    model = train(train_subjects,X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
     model.save(model_path)
     print(f'Model saved to {model_path}')
     # Test the model on the remaining subjects
