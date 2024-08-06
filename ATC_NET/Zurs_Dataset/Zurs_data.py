@@ -255,21 +255,23 @@ def test(model, Z, w, subject):
 def draw_learning_curves(history, subjects):
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
-    plt.title('Model accuracy: ', subjects)
+    
+    subjects_str = ', '.join(subjects)
+    plt.title('Model accuracy')
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'val'], loc='upper left')
-    plt.savefig('accuracy_validation' + '.png')
+    plt.savefig(os.path.join(results_folder, 'accuracy_validation.png'))
     plt.close()
 
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
-    plt.title('Model loss: ' + subjects)
+    plt.title(join('Model loss'))
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
     plt.legend(['Train', 'val'], loc='upper left')
-    plt.savefig('loss_validation' + '.png')
-    print('saved graphs for subject training validation')
+    plt.savefig(os.path.join(results_folder, 'loss_validation.png'))
+    print('saved acc, loss graphs for subject training validation')
     plt.close()
 
 def save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes, stage):
@@ -338,7 +340,7 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
 
     # Train the model
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=100, batch_size=32,
+    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=20, batch_size=32,
                         callbacks=[early_stopping])
     # Evaluate the model
     loss, accuracy, precision, recall = model.evaluate(X_val, y_val)
@@ -488,7 +490,7 @@ if __name__ == '__main__':
     total_sounds = 60
 
     subject_list = ['BIJVZD', 'EFFEUS'
-                    #, 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'NFICHK', 'RHQBHE', 'RMAALZ', 'TQZHZT',
+                    #, 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'misssing two matrices NFICHK', 'RHQBHE', 'RMAALZ', 'missing 2 matrices TQZHZT',
                     #                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
                     ]
     model_path = 'trained_model.h5'
@@ -496,7 +498,7 @@ if __name__ == '__main__':
     batch_size = 128
 
 
-    do_preprocess = True
+    do_preprocess = False
     if do_preprocess:
         for subject in subject_list:
             preprocess(subject)
