@@ -489,16 +489,16 @@ if __name__ == '__main__':
     n_subjects = 15
     total_sounds = 60
 
-    subject_list = ['BIJVZD', 'EFFEUS'
-                    #, 'GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ', 'misssing two matrices NFICHK', 'RHQBHE', 'RMAALZ', 'missing 2 matrices TQZHZT',
-                    #                    'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
+    subject_list = ['GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
+		    # 'BIJVZD', 'EFFEUS'
+                    #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
                     ]
     model_path = 'trained_model.h5'
     training_epochs = 1
     batch_size = 128
 
 
-    do_preprocess = False
+    do_preprocess = True
     if do_preprocess:
         for subject in subject_list:
             preprocess(subject)
@@ -514,13 +514,11 @@ if __name__ == '__main__':
             if os.path.exists(f'interpolated_ordered_response_labels_{subject}.npy'):
                 os.remove(f'interpolated_ordered_response_labels_{subject}.npy')
 
-
+    quit()
     # Randomly split the subjects into training and testing sets
     random.shuffle(subject_list)
     train_subjects = subject_list[:len(subject_list) // 2]
     test_subjects = subject_list[len(subject_list) // 2:]
-    train_subjects = ['BIJVZD']
-    test_subjects = ['EFFEUS']
 
     results_folder = 'results_' + str(test_subjects)
     # Create results folder
