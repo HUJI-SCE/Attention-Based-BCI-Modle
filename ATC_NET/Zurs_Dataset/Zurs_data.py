@@ -131,7 +131,10 @@ def load_behavioral_data(subject, mat_file_path):
                 for ref in ref_array:
                     for r in ref:
                         dereferenced = file[r]
+                        dereferenced = dereferenced[:]
                         specific_trial_clicks = np.array(dereferenced)
+                        if(np.all(dereferenced==0)):
+                            continue
                         data_list.append(specific_trial_clicks.squeeze(axis = 0))
                 return data_list
 
@@ -489,8 +492,8 @@ if __name__ == '__main__':
     n_subjects = 15
     total_sounds = 60
 
-    subject_list = ['GQEVXE', 'HGWLOI', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI'
-		    # 'BIJVZD', 'EFFEUS'
+    subject_list = [
+        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
                     #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
                     ]
     model_path = 'trained_model.h5'
@@ -498,7 +501,7 @@ if __name__ == '__main__':
     batch_size = 128
 
 
-    do_preprocess = True
+    do_preprocess = False 
     if do_preprocess:
         for subject in subject_list:
             preprocess(subject)
@@ -514,7 +517,7 @@ if __name__ == '__main__':
             if os.path.exists(f'interpolated_ordered_response_labels_{subject}.npy'):
                 os.remove(f'interpolated_ordered_response_labels_{subject}.npy')
 
-    quit()
+    
     # Randomly split the subjects into training and testing sets
     random.shuffle(subject_list)
     train_subjects = subject_list[:len(subject_list) // 2]
@@ -551,3 +554,4 @@ if __name__ == '__main__':
         print(Z.shape)
         print(w.shape)
         test(model, Z, w, subject)
+
