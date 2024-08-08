@@ -491,17 +491,19 @@ if __name__ == '__main__':
     n_windows = 5
     n_subjects = 15
     total_sounds = 60
-
-    subject_list = [
-        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
-                    #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
-                    ]
-    model_path = 'trained_model.h5'
-    training_epochs = 1
     batch_size = 128
 
 
-    do_preprocess = False 
+
+
+
+    subject_list = [
+                    'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
+                    #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
+                    ]
+    model_path = 'trained_model.h5'
+
+    do_preprocess = False
     if do_preprocess:
         for subject in subject_list:
             preprocess(subject)
@@ -517,7 +519,7 @@ if __name__ == '__main__':
             if os.path.exists(f'interpolated_ordered_response_labels_{subject}.npy'):
                 os.remove(f'interpolated_ordered_response_labels_{subject}.npy')
 
-    
+
     # Randomly split the subjects into training and testing sets
     random.shuffle(subject_list)
     train_subjects = subject_list[:len(subject_list) // 2]
@@ -528,30 +530,36 @@ if __name__ == '__main__':
     if os.path.exists(results_folder):
         shutil.rmtree(results_folder)
     os.makedirs(results_folder)
+    train_subjects = ['HNJUPJ','RHQBHE', 'RMAALZ', 'YMKSWS', 'BIJVZD', 'ZLIDEI']
+    test_subjects = ['EFFEUS', 'WWDVDF', 'HITXMV', 'UOBXJO', 'HGWLOI', 'GQEVXE', 'TUZEZT']
 
+    training = True
+    if(training):
+        print(f'Training on subjects: {train_subjects}')
+        # Load and concatenate training data
+        X_train, y_train = [], []
+        for subject in train_subjects:
+            X = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
+            y = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
+            X_train.append(X)
+            y_train.append(y)
+        X_train = np.concatenate(X_train, axis=0)
+        y_train = np.concatenate(y_train, axis=0)
 
-    print(f'Training on subjects: {train_subjects}')
-    print(f'Testing on subjects: {test_subjects}')
+        model = train(train_subjects,X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
+        model.save(model_path)
+        print(f'Model saved to {model_path}')
 
-
-    # Load and concatenate training data
-    X_train, y_train = [], []
-    for subject in train_subjects:
-        X = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
-        y = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
-        X_train.append(X)
-        y_train.append(y)
-    X_train = np.concatenate(X_train, axis=0)
-    y_train = np.concatenate(y_train, axis=0)
-
-    model = train(train_subjects,X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
-    model.save(model_path)
-    print(f'Model saved to {model_path}')
-    # Test the model on the remaining subjects
-    for subject in test_subjects:
-        Z = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
-        w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
-        print(Z.shape)
-        print(w.shape)
-        test(model, Z, w, subject)
+                   
+    testing = True
+    if(testing):
+        print(f'Testing on subjects: {test_subjects}')
+        # Test the model on the remaining subjects
+        for subject in test_subjects:
+            Z = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
+            w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
+            print(Z.shape)
+            print(w.shape)
+#            model=load_trained_model(model_path)
+            test(model, Z, w, subject)
 
