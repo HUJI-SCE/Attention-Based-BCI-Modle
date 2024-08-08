@@ -361,7 +361,7 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
     print('Plot Learning Curves ....... ')
     draw_learning_curves(history, subjects)
     save_metrics(accuracy, loss, precision, recall,
-                 subject="", y_pred_classes=y_pred_classes,
+                 subject="train_subjects", y_pred_classes=y_pred_classes,
                  y_true_classes=y_true, stage="training")
     # cm = confusion_matrix(y_true, y_pred_classes)
     # print("Confusion Matrix:\n", cm)
@@ -498,9 +498,9 @@ if __name__ == '__main__':
 
 
     subject_list = [
-                    'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
-                    #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
-                    ]
+        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
+        #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
+    ]
     model_path = 'trained_model.h5'
 
     do_preprocess = False
@@ -525,13 +525,25 @@ if __name__ == '__main__':
     train_subjects = subject_list[:len(subject_list) // 2]
     test_subjects = subject_list[len(subject_list) // 2:]
 
-    results_folder = 'results_' + str(test_subjects)
-    # Create results folder
-    if os.path.exists(results_folder):
-        shutil.rmtree(results_folder)
+    # Determine the next available run number
+    existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]
+    if existing_folders:
+        # Extract run numbers and find the maximum
+        run_numbers = [int(f.split('_')[-1]) for f in existing_folders if f.split('_')[-1].isdigit()]
+        next_run_number = max(run_numbers) + 1
+    else:
+        next_run_number = 1
+
+    # Create the results folder with the next consecutive number
+    results_folder = f'results_run_{next_run_number}'
+    #if os.path.exists(results_folder):
+    # shutil.rmtree(results_folder)
     os.makedirs(results_folder)
-    train_subjects = ['HNJUPJ','RHQBHE', 'RMAALZ', 'YMKSWS', 'BIJVZD', 'ZLIDEI']
-    test_subjects = ['EFFEUS', 'WWDVDF', 'HITXMV', 'UOBXJO', 'HGWLOI', 'GQEVXE', 'TUZEZT']
+
+    # Save the subject split information in the results folder
+    with open(os.path.join(results_folder, 'subject_info.txt'), 'w') as f:
+        f.write(f"Training Subjects: {', '.join(train_subjects)}\n")
+        f.write(f"Testing Subjects: {', '.join(test_subjects)}\n")
 
     training = True
     if(training):
@@ -550,7 +562,7 @@ if __name__ == '__main__':
         model.save(model_path)
         print(f'Model saved to {model_path}')
 
-                   
+
     testing = True
     if(testing):
         print(f'Testing on subjects: {test_subjects}')
@@ -560,6 +572,6 @@ if __name__ == '__main__':
             w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
             print(Z.shape)
             print(w.shape)
-#            model=load_trained_model(model_path)
+            #            model=load_trained_model(model_path)
             test(model, Z, w, subject)
 
