@@ -1,0 +1,16 @@
+training loss: 0.549304187297821
+training accuracy: 0.790338397026062
+training precision: 0.790338397026062
+training recall: 0.790338397026062
+Confusion Matrix:
+[[3938  670]
+ [1257 3326]]
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.76      0.85      0.80      4608
+           1       0.83      0.73      0.78      4583
+
+    accuracy                           0.79      9191
+   macro avg       0.80      0.79      0.79      9191
+weighted avg       0.80      0.79      0.79      9191

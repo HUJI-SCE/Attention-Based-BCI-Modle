@@ -343,7 +343,7 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
 
     # Train the model
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=20, batch_size=32,
+    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=100, batch_size=32,
                         callbacks=[early_stopping])
     # Evaluate the model
     loss, accuracy, precision, recall = model.evaluate(X_val, y_val)
@@ -520,10 +520,15 @@ if __name__ == '__main__':
                 os.remove(f'interpolated_ordered_response_labels_{subject}.npy')
 
 
+
     # Randomly split the subjects into training and testing sets
-    random.shuffle(subject_list)
-    train_subjects = subject_list[:len(subject_list) // 2]
-    test_subjects = subject_list[len(subject_list) // 2:]
+    
+    train_subjects = random.sample(subject_list, len(subject_list) - 3)
+    test_subjects = [sub for sub in subject_list if sub not in train_subjects]
+    
+#    random.shuffle(subject_list)
+#    train_subjects = subject_list[:len(subject_list) // 2]
+#    test_subjects = subject_list[len(subject_list) // 2:]
 
     # Determine the next available run number
     existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]

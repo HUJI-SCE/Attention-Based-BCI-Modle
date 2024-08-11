@@ -1,0 +1,16 @@
+Testing loss: 1.0590966939926147
+Testing accuracy: 0.5890792012214661
+Testing precision: 0.5890792012214661
+Testing recall: 0.5890792012214661
+Confusion Matrix:
+[[ 651 1684]
+ [ 235 2100]]
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.73      0.28      0.40      2335
+           1       0.55      0.90      0.69      2335
+
+    accuracy                           0.59      4670
+   macro avg       0.64      0.59      0.55      4670
+weighted avg       0.64      0.59      0.55      4670

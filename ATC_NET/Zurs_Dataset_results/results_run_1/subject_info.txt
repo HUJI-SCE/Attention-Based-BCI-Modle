@@ -1,0 +1,4 @@
+Training Subjects: TUZEZT, HNJUPJ, EFFEUS, YMKSWS, HITXMV, RMAALZ, UOBXJO, HGWLOI, ZLIDEI, GQEVXE
+Testing Subjects: RHQBHE, WWDVDF, BIJVZD
+epochs=20
+batch_size=32

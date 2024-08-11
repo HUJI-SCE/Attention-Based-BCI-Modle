@@ -1,0 +1,4 @@
+Training Subjects: BIJVZD
+Testing Subjects: EFFEUS
+epochs=20
+batch_size=32
