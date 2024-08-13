@@ -1,0 +1,5 @@
+Training Subjects: HITXMV
+Testing Subjects: HGWLOI, GQEVXE, HNJUPJ
+epochs = 100
+batch_size = 32
+validation percentage from train = 0.5
