@@ -8,9 +8,10 @@
 The project is a BCI application that can accept data samples of EEG captured Brain Waves and return
 whether or not the user intended to click the spacebar.
 
-The project resides in the git repo path "ATC_NET/"
-Our first attempt at a model resides in "neural_net_demo/" and is no longer maintained
-We did our sanity checks on much simpler models in "sanity_labs/" and it is also no longer maintained
+## Project Structure:
+* The project resides in the git repo path "ATC_NET/".
+* Our first attempt at a model resides in "neural_net_demo/" and is no longer maintained.
+* We did our sanity checks on much simpler models in "sanity_labs/" and it is also no longer maintained.
 
 ## Features
 * Machine learning Model ATC_NET, taken from git repo: https://github.com/Altaheri/EEG-ATCNet
