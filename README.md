@@ -13,8 +13,8 @@ Our first attempt at a model resides in "neural_net_demo/" and is no longer main
 We did our sanity checks on much simpler models in "sanity_labs/" and it is also no longer maintained
 
 ## Features
-* Machine learning Model ATC_NET, taken from git repo: <insert link>
-* Dataset from Nathanel Zur's experiment:
+* Machine learning Model ATC_NET, taken from git repo: https://github.com/Altaheri/EEG-ATCNet
+* Dataset from Nathanel Zur's experiment: 
 * Preproceesses dataset data, trains, tests and evaluates the model.
 * Saves the model for further application
 
