@@ -22,14 +22,25 @@ from keras.utils import plot_model
 
 def preprocess(subject, trial_count=40, sound_count=30):
     """
-    Collects all eeg clips form all subjects, orders them, and adds labels of space-bar presses.
+        Preprocesses EEG data by collecting, ordering, and saving EEG clips for a given subject.
 
-    First we establish teh order of the clip presentation - all subjects get the
-    same clips in the same order, so needs to be done only once.
+        This function reads EEG clips for a specified subject, orders them according to the predefined order of sound stimuli,
+        and saves the ordered clips as a NumPy array. The clip order is determined by a text file that specifies the order
+        of sound stimuli for each trial. This ordering process ensures that the EEG data from all subjects is aligned
+        according to the same presentation order.
 
-    :param trial_count: how many trials, per subject
-    :param sound_count: how many sounds are presented to each subject
-    :return: an array of X-y dataset, per subject: [shape: X:(15, 40, 128, 256), y:(40, 1, 256)]
+        Parameters:
+        ----------
+        subject : str
+            Identifier of the subject whose data is being processed.
+        trial_count : int, optional, default=40
+            Number of trials per subject.
+        sound_count : int, optional, default=30
+            Number of sounds presented to each subject.
+
+        Returns:
+        -------
+        None
     """
 
     '''establish the order of the clips'''
@@ -68,8 +79,30 @@ def preprocess(subject, trial_count=40, sound_count=30):
 
     np.save(f'ordered_clips_{subject}.npy', clip_eeg)
 
+
 def detect_mat_version(file_path):
-    """Detect the version of a .mat file."""
+    """
+    Detects the version of a MATLAB .mat file.
+
+    This function reads the header of a .mat file to determine its version. MATLAB .mat files can be of different versions,
+    including MATLAB 5.0 (traditional MAT-files) and HDF5 (introduced in MATLAB v7.3). The function returns the version number
+    or raises an error if the version is unknown.
+
+    Parameters:
+    ----------
+    file_path : str
+        Path to the .mat file.
+
+    Returns:
+    -------
+    int
+        Version number of the .mat file (5 or 7).
+
+    Raises:
+    ------
+    ValueError
+        If the .mat file version is unknown.
+    """
     with open(file_path, 'rb') as f:
         header = f.read(128).decode('latin1')
         if 'MATLAB 5.0 MAT-file' in header:
@@ -79,7 +112,28 @@ def detect_mat_version(file_path):
         else:
             raise ValueError("Unknown .mat file version")
 
+
 def create_clicks_array(subject, trial_count=40):
+    """
+        Creates a 2D array representing spacebar clicks during trials for a given subject.
+
+        This function processes behavioral data from a .mat file and generates an array indicating
+        the timing of spacebar clicks during trials. The array has dimensions of (trials, time samples),
+        where each entry is 1 if a spacebar was pressed at that time and 0 otherwise.
+        The resulting array is saved as a .npy file.
+
+        Parameters:
+        ----------
+        subject : str
+            Identifier of the subject whose data is being processed.
+        trial_count : int, optional, default=40
+            Number of trials per subject.
+
+        Returns:
+        -------
+        None
+    """
+
     behavioral_path = join('subjects', f'{subject}', f'ShortClipTwoBack_res_sbj{subject}.mat')
 
     resptms, results, aborted, trknms, trkorder, dettms, corr = load_behavioral_data(subject, behavioral_path)
@@ -113,7 +167,37 @@ def create_clicks_array(subject, trial_count=40):
     response_labels = response_labels_reordered
     np.save(f'ordered_response_labels_{subject}.npy', response_labels)
 
-def load_behavioral_data(subject, mat_file_path):
+
+def load_behavioral_data(mat_file_path):
+    """
+        Loads behavioral data from a .mat file for a given subjects mat file path.
+
+        This function loads and processes behavioral data from a MATLAB .mat file. The data includes information
+        about trials, such as aborted trials, track names, order of tracks, detection times, response times, and correctness.
+        The function handles both MATLAB v5 and v7.3 formats.
+
+        Parameters:
+        ----------
+        mat_file_path : str
+            Path to the .mat file containing the behavioral data.
+
+        Returns:
+        -------
+        tuple
+            A tuple containing the following elements:
+            - resptms: Response times.
+            - results: Results data structure.
+            - aborted: Aborted trials indicator.
+            - trknms: Track names.
+            - trkorder: Order of tracks.
+            - dettms: Detection times.
+            - corr: Correctness of responses.
+
+        Raises:
+        ------
+        ValueError
+            If the experiment was aborted.
+    """
 
     mat = detect_mat_version(mat_file_path)
     if mat==7:
@@ -172,8 +256,23 @@ def load_behavioral_data(subject, mat_file_path):
     return resptms, results, aborted, trknms, trkorder, dettms, corr
 
 
-
 def plot_eeg_channel_amp(eeg_data_i):
+    """
+        Plots the amplitude of an EEG channel over time for a single presentation.
+
+        This function generates and saves a plot of EEG data for the first channel
+        of the first presentation in the provided EEG data array. The plot displays
+        the amplitude of the EEG signal over time points.
+
+        Parameters:
+        ----------
+        eeg_data_i : np.array
+            EEG data array with shape (time_points, channels, presentations).
+
+        Returns:
+        -------
+        None
+    """
     # Dimensions of the clipeeg variable
     time_points = eeg_data_i.shape[0]  # 256 samples (time)
     channels = eeg_data_i.shape[1]  # 128 channels
@@ -201,17 +300,31 @@ def segment_eeg_data_with_overlap(eeg, labels, window_duration, overlap, n_class
     """
     Segments EEG data with overlapping windows and assigns labels.
 
+    This function segments EEG data using a sliding window approach with a specified overlap.
+    Each segment is assigned a label based on the presence of specific events (e.g., spacebar clicks)
+    within the window. The function returns the segmented EEG data and corresponding one-hot encoded labels.
+
     Parameters:
-    - eeg: np.array, shape [sound, trial, electrode, time]
-    - labels: np.array, shape [trial, samples]
-    - window_duration: int, duration of each window in samples
-    - overlap: float, proportion of overlap between consecutive windows (0 < overlap < 1)
-    - n_classes: int, number of classes for classification
+    ----------
+    eeg : np.array
+        The EEG data array with shape (sound, trial, electrode, time).
+    labels : np.array
+        The labels array with shape (trial, samples).
+    window_duration : int
+        Duration of each window in samples.
+    overlap : float
+        Proportion of overlap between consecutive windows (0 < overlap < 1).
+    n_classes : int, optional, default=2
+        Number of classes for classification.
 
     Returns:
-    - segmented_data: np.array, shape [num_segments, electrode, window_duration]
-    - segmented_labels: np.array, shape [num_segments, n_classes]
+    -------
+    tuple
+        A tuple containing the following elements:
+        - segmented_data: np.array, shape (num_segments, electrode, window_duration)
+        - segmented_labels: np.array, shape (num_segments, n_classes)
     """
+
     num_sounds, num_trials, num_electrodes, _ = eeg.shape
     stride = int(window_duration * (1 - overlap))
     segmented_data = []
@@ -239,6 +352,30 @@ def segment_eeg_data_with_overlap(eeg, labels, window_duration, overlap, n_class
 
 
 def test(model, Z, w, subject):
+    """
+        Evaluates a trained model on test data and saves the metrics.
+
+        This function evaluates a trained model on a given test dataset,
+        prints out metrics such as loss, accuracy, precision, and recall,
+        and saves these metrics along with the confusion matrix.
+        Predicted labels and true labels are also saved for further analysis.
+
+        Parameters:
+        ----------
+        model : keras.Model
+            The trained model to be evaluated.
+        Z : np.array
+            The test dataset features.
+        w : np.array
+            The test dataset labels.
+        subject : str
+            Identifier of the subject whose data is being tested.
+
+        Returns:
+        -------
+        None
+    """
+
     # Verify the class distribution in the testing set
     print("Testing set class distribution:", Counter(np.argmax(w, axis=1)))
 
@@ -256,9 +393,28 @@ def test(model, Z, w, subject):
 
 
 def draw_learning_curves(history, subjects):
+    """
+       Plots and saves learning curves for training and validation accuracy/loss.
+
+       This function plots the learning curves for training and validation accuracy and loss
+       over epochs, using the history of a Keras model's training process. The plots are saved
+       as PNG files.
+
+       Parameters:
+       ----------
+       history : keras.callbacks.History
+           The history object returned by the model's fit method.
+       subjects : list
+           List of subjects used in training.
+
+       Returns:
+       -------
+       None
+   """
+
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
-    
+
     subjects_str = ', '.join(subjects)
     plt.title('Model accuracy')
     plt.ylabel('Accuracy')
@@ -277,7 +433,39 @@ def draw_learning_curves(history, subjects):
     print('saved acc, loss graphs for subject training validation')
     plt.close()
 
+
 def save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes, stage):
+    """
+    Saves the evaluation metrics and confusion matrix to a file.
+
+    This function saves the accuracy, loss, precision, and recall metrics,
+    along with the confusion matrix, to a text file. The file is named according
+    to the subject and the stage of evaluation (e.g., training, testing).
+
+    Parameters:
+    ----------
+    accuracy : float
+        Accuracy of the model.
+    loss : float
+        Loss value of the model.
+    precision : float
+        Precision of the model.
+    recall : float
+        Recall of the model.
+    subject : str
+        Identifier of the subject.
+    y_pred_classes : np.array
+        Predicted class labels.
+    y_true_classes : np.array
+        True class labels.
+    stage : str
+        The stage of evaluation (e.g., 'training', 'testing').
+
+    Returns:
+    -------
+    None
+    """
+
     cm = save_confusion_mat(subject, y_pred_classes, y_true_classes)
     # Save metrics and confusion matrix
     with open(os.path.join(results_folder, f'{stage}_results_{subject}.txt'), 'w') as f:
@@ -290,6 +478,27 @@ def save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_t
 
 
 def save_confusion_mat(subject, y_pred_classes, y_true_classes):
+    """
+    Generates and saves a confusion matrix plot.
+
+    This function generates a confusion matrix based on the predicted and true class labels,
+    displays it, and saves the plot as a PNG file. The filename is based on the subject identifier.
+
+    Parameters:
+    ----------
+    subject : str
+        Identifier of the subject.
+    y_pred_classes : np.array
+        Predicted class labels.
+    y_true_classes : np.array
+        True class labels.
+
+    Returns:
+    -------
+    np.array
+        The confusion matrix.
+    """
+
     # Generate and display the confusion matrix
     cm = confusion_matrix(y_true_classes, y_pred_classes)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
@@ -303,10 +512,51 @@ def save_confusion_mat(subject, y_pred_classes, y_true_classes):
 
 
 def load_trained_model(model_path):
+    """
+    Loads a pre-trained Keras model from a file.
+
+    This function loads and returns a Keras model that has been saved to the specified file path.
+
+    Parameters:
+    ----------
+    model_path : str
+        Path to the saved model file.
+
+    Returns:
+    -------
+    keras.Model
+        The loaded Keras model.
+    """
     return load_model(model_path)
 
 
-def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
+def train(subjects, X, y, in_chans, in_samples, tcn_kernel):
+    """
+    Trains a deep learning model on EEG data.
+
+    This function defines, compiles, and trains a deep learning model (ATCNet) on the provided EEG data.
+    The data is split into training and validation sets, and the model's performance is evaluated after training.
+    Training metrics, confusion matrices, and learning curves are saved for later analysis.
+
+    Parameters:
+    ----------
+    subjects : list
+        List of subject identifiers used for training.
+    X : np.array
+        The input EEG data.
+    y : np.array
+        The labels for the EEG data.
+    in_chans : int
+        Number of input channels (electrodes).
+    in_samples : int
+        Number of time samples per input window.
+    tcn_kernel : int
+        Size of the kernel for the Temporal Convolutional Network (TCN).
+
+    Returns:
+    -------
+    None
+    """
     global history
     # Define and compile the model with the new window size
     model = models.ATCNet_(
@@ -370,6 +620,25 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
 
 
 def interpolate_eeg(data, target_length):
+    """
+    Interpolates EEG data to increase the number of time samples.
+
+    This function interpolates the EEG data by repeating samples and averaging adjacent pairs to
+    double the temporal resolution of the data.
+
+    Parameters:
+    ----------
+    data : np.array
+        The EEG data array to be interpolated.
+    target_length : int
+        The target number of time samples after interpolation.
+
+    Returns:
+    -------
+    np.array
+        The interpolated EEG data.
+    """
+
     interpolated_data = np.zeros((data.shape[0], data.shape[1], data.shape[2], target_length))
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
@@ -384,8 +653,26 @@ def interpolate_eeg(data, target_length):
     return interpolated_data
 
 
-# Interpolation function for clicks data
 def interpolate_clicks(clicks, target_length):
+    """
+    Interpolates click data to match the length of the interpolated EEG data.
+
+    This function interpolates click data to ensure that its length matches the interpolated EEG data.
+    It doubles the array size by repeating elements.
+
+    Parameters:
+    ----------
+    clicks : np.array
+        The click data array to be interpolated.
+    target_length : int
+        The target number of samples after interpolation.
+
+    Returns:
+    -------
+    np.array
+        The interpolated click data.
+    """
+
     interpolated_clicks = np.zeros((clicks.shape[0], target_length), dtype=int)
     for i in range(clicks.shape[0]):
         clicks_clicks = clicks[i].repeat(2)
@@ -394,6 +681,22 @@ def interpolate_clicks(clicks, target_length):
 
 
 def interpolate_data(subject):
+    """
+    Interpolates both EEG and click data for a specified subject.
+
+    This function loads, interpolates, and saves both EEG and click data for a given subject.
+    It ensures that both datasets have the same number of time samples after interpolation.
+
+    Parameters:
+    ----------
+    subject : str
+        Identifier of the subject whose data is being interpolated.
+
+    Returns:
+    -------
+    None
+    """
+
     global total_sounds
     eeg = np.load(f'ordered_clips_{subject}.npy')
     clicks_array = np.load(f'ordered_response_labels_{subject}.npy')
@@ -456,6 +759,22 @@ def interpolate_data(subject):
 
 
 def SMOTE_data(subject):
+    """
+    Balances the EEG dataset using Synthetic Minority Over-sampling Technique (SMOTE).
+
+    This function applies SMOTE to balance the class distribution in the EEG dataset.
+    It reshapes the EEG data and labels, applies SMOTE to generate synthetic examples
+    for the minority class, and saves the resampled dataset.
+
+    Parameters:
+    ----------
+    subject : str
+        Identifier of the subject whose data is being balanced.
+
+    Returns:
+    -------
+    None
+    """
     # EEFFOUS X[2400][1][128][512] y[2400]
     # BIJVZD  X[2400][1][128][512] y[2400]
 
@@ -479,6 +798,7 @@ def SMOTE_data(subject):
 
 
 
+
 if __name__ == '__main__':
 
     # Update paths and model configuration here
@@ -492,9 +812,6 @@ if __name__ == '__main__':
     n_subjects = 15
     total_sounds = 60
     batch_size = 128
-
-
-
 
 
     subject_list = [
@@ -525,10 +842,6 @@ if __name__ == '__main__':
     
     train_subjects = random.sample(subject_list, len(subject_list) - 3)
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
-    
-#    random.shuffle(subject_list)
-#    train_subjects = subject_list[:len(subject_list) // 2]
-#    test_subjects = subject_list[len(subject_list) // 2:]
 
     # Determine the next available run number
     existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]
@@ -569,7 +882,9 @@ if __name__ == '__main__':
 
 
     testing = True
-    if(testing):
+    if not training:
+        model = load_trained_model(model_path)
+    if testing:
         print(f'Testing on subjects: {test_subjects}')
         # Test the model on the remaining subjects
         for subject in test_subjects:
@@ -577,6 +892,6 @@ if __name__ == '__main__':
             w = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
             print(Z.shape)
             print(w.shape)
-            #            model=load_trained_model(model_path)
+
             test(model, Z, w, subject)
 
