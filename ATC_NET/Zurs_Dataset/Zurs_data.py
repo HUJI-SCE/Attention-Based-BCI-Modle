@@ -797,9 +797,59 @@ def SMOTE_data(subject):
     np.save(f"subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy", y_resampled)
 
 
+def model_3d_representation(SMOTE_eeg, SMOTE_labels, sample_index):
+    """
+    Models a 3D representation of a single EEG sample and highlights time points where a 'click' occurs.
+
+    This function visualizes the EEG data of a single sample in 3D space, where the x-axis represents the time dimension,
+    the y-axis represents the electrode index, and the z-axis represents the amplitude of the EEG signal. Each electrode's
+    signal over time is plotted as a separate line in 3D space, with 'click' points highlighted according to the
+    corresponding time points in the SMOTE_labels array.
+
+    Parameters:
+    ----------
+    SMOTE_eeg : np.array
+        The EEG data array after SMOTE, with shape (4574, 1, 128, 512).
+        4574 is the number of samples, 128 is the number of electrodes, and 512 is the time dimension.
+    SMOTE_labels : np.array
+        One-hot encoded class labels for the EEG data, with shape (4574, 2).
+        The first 512 values in SMOTE_labels correspond to time points where clicks occur.
+    sample_index : int
+        Index of the sample to be visualized.
+
+    Returns:
+    -------
+    None
+    """
+    # Extract the single sample's EEG data: shape (128, 512)
+    sample_data = SMOTE_eeg[sample_index, 0, :, :]
+
+    # Identify the time points where 'clicks' occur based on SMOTE_labels
+    if SMOTE_labels[sample_index][0]: clicked = 'a'
+    else: clicked = 'not a'
+
+    # Create the plot
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot each electrode's signal over time
+    for i in range(sample_data.shape[0]):
+        ax.plot(np.arange(sample_data.shape[1]), [i] * sample_data.shape[1], sample_data[i], label=f'Electrode {i+1}')
+
+    # Set labels and title
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Electrode Index')
+    ax.set_zlabel('Amplitude')
+    ax.set_title(f'3D EEG Representation for Sample {sample_index}, there was {clicked} click')
+
+    plt.savefig(os.path.join(results_folder, f'sample_{sample_index}_subject_BIJVZD.png'))
+
+
 
 
 if __name__ == '__main__':
+
+
 
     # Update paths and model configuration here
     n_classes = 2
@@ -852,18 +902,33 @@ if __name__ == '__main__':
     else:
         next_run_number = 1
 
-    # Create the results folder with the next consecutive number
-    results_folder = f'results_run_{next_run_number}'
-    #if os.path.exists(results_folder):
-    # shutil.rmtree(results_folder)
-    os.makedirs(results_folder)
+    model_brainwaves=True
+    if model_brainwaves:
+        results_folder = "."
+        subject=("BIJVZD")
+        # (4574, 1, 128, 512)
+        # (4574, 2)
+        SMOTE_labels    = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
+        SMOTE_eeg       = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
+        # Assume SMOTE_eeg and labels are loaded
+        model_3d_representation(SMOTE_eeg, SMOTE_labels, 0)
 
-    # Save the subject split information in the results folder
-    with open(os.path.join(results_folder, 'subject_info.txt'), 'w') as f:
-        f.write(f"Training Subjects: {', '.join(train_subjects)}\n")
-        f.write(f"Testing Subjects: {', '.join(test_subjects)}\n")
+    training = False
+    testing = False
+    if training or testing:
+        # Create the results folder with the next consecutive number
+        results_folder = f'results_run_{next_run_number}'
+        #if os.path.exists(results_folder):
+        # shutil.rmtree(results_folder)
+        os.makedirs(results_folder)
 
-    training = True
+        # Save the subject split information in the results folder
+        with open(os.path.join(results_folder, 'subject_info.txt'), 'w') as f:
+            f.write(f"Training Subjects: {', '.join(train_subjects)}\n")
+            f.write(f"Testing Subjects: {', '.join(test_subjects)}\n")
+
+
+
     if(training):
         print(f'Training on subjects: {train_subjects}')
         # Load and concatenate training data
@@ -881,10 +946,9 @@ if __name__ == '__main__':
         print(f'Model saved to {model_path}')
 
 
-    testing = True
-    if not training:
-        model = load_trained_model(model_path)
     if testing:
+        if not training:
+            model = load_trained_model(model_path)
         print(f'Testing on subjects: {test_subjects}')
         # Test the model on the remaining subjects
         for subject in test_subjects:
