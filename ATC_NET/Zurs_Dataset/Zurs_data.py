@@ -306,7 +306,7 @@ def load_trained_model(model_path):
     return load_model(model_path)
 
 
-def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
+def train(subjects, X,y, in_chans, in_samples, tcn_kernel, epochs, batch_size, train_to_val_percentage):
     global history
     # Define and compile the model with the new window size
     model = models.ATCNet_(
@@ -329,7 +329,7 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
     # Split the data into training and validation sets
     # print(X.shape)
     # print(y.shape)
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=train_to_val_percentage, random_state=42)
 
     # # Verify the new shapes
     # print("X_train shape:", X_train.shape)
@@ -343,7 +343,7 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel):
 
     # Train the model
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=100, batch_size=32,
+    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epochs, batch_size=batch_size,
                         callbacks=[early_stopping])
     # Evaluate the model
     loss, accuracy, precision, recall = model.evaluate(X_val, y_val)
@@ -491,14 +491,12 @@ if __name__ == '__main__':
     n_windows = 5
     n_subjects = 15
     total_sounds = 60
-    batch_size = 128
-
-
-
-
+    batch_size = 64
+    epochs = 100
+    train_to_val_percentage = 0.9
 
     subject_list = [
-        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ','RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
+        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ' ,'RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
         #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
     ]
     model_path = 'trained_model.h5'
@@ -522,8 +520,7 @@ if __name__ == '__main__':
 
 
     # Randomly split the subjects into training and testing sets
-    
-    train_subjects = random.sample(subject_list, len(subject_list) - 3)
+    train_subjects = random.sample(subject_list, len(subject_list) - 1)
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
     
 #    random.shuffle(subject_list)
@@ -549,6 +546,9 @@ if __name__ == '__main__':
     with open(os.path.join(results_folder, 'subject_info.txt'), 'w') as f:
         f.write(f"Training Subjects: {', '.join(train_subjects)}\n")
         f.write(f"Testing Subjects: {', '.join(test_subjects)}\n")
+        f.write(f"epochs = {epochs}\n")
+        f.write(f"batch_size = {batch_size}\n")
+        f.write(f"validation percentage from train = {train_to_val_percentage}\n")
 
     training = True
     if(training):
@@ -563,7 +563,7 @@ if __name__ == '__main__':
         X_train = np.concatenate(X_train, axis=0)
         y_train = np.concatenate(y_train, axis=0)
 
-        model = train(train_subjects,X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel)
+        model = train(train_subjects,X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel, epochs=epochs, batch_size=batch_size, train_to_val_percentage=train_to_val_percentage)
         model.save(model_path)
         print(f'Model saved to {model_path}')
 
