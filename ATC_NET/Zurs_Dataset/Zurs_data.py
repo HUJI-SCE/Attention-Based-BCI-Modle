@@ -559,17 +559,21 @@ def train(subjects, X,y, in_chans, in_samples, tcn_kernel, epochs, batch_size, t
     """
     global history
     # Define and compile the model with the new window size
-    model = models.ATCNet_(
-        # Dataset parameters
-        n_classes=2, in_chans=in_chans, in_samples=in_samples,
-        # Sliding window (SW) parameter
-        n_windows=5,
-        # Attention (AT) block parameter
-        attention='mha',  # Options: None, 'mha','mhla', 'cbam', 'se'
-        # Convolutional (CV) block parameters
-        eegn_F1=16, eegn_D=2, eegn_kernelSize=64, eegn_poolSize=7, eegn_dropout=0.3,
-        # Temporal convolutional (TC) block parameters
-        tcn_depth=2, tcn_kernelSize=tcn_kernel, tcn_filters=32, tcn_dropout=0.3, tcn_activation='elu')
+    if choose_model == "ATCNet":
+        model = models.ATCNet_(
+            # Dataset parameters
+            n_classes=2, in_chans=in_chans, in_samples=in_samples,
+            # Sliding window (SW) parameter
+            n_windows=5,
+            # Attention (AT) block parameter
+            attention='mha',  # Options: None, 'mha','mhla', 'cbam', 'se'
+            # Convolutional (CV) block parameters
+            eegn_F1=16, eegn_D=2, eegn_kernelSize=64, eegn_poolSize=7, eegn_dropout=0.3,
+            # Temporal convolutional (TC) block parameters
+            tcn_depth=2, tcn_kernelSize=tcn_kernel, tcn_filters=32, tcn_dropout=0.3, tcn_activation='elu')
+    elif choose_model == "ShallowConvNet":
+        model = models.ShallowConvNet(nb_classes=2, Chans=in_chans, Samples=in_samples)
+
     model.compile(optimizer='adam',
                   loss='categorical_crossentropy',
                   metrics=['accuracy'
@@ -861,9 +865,9 @@ if __name__ == '__main__':
     n_windows = 5
     n_subjects = 15
     total_sounds = 60
-    batch_size = 32
-    epochs = 100
-    train_to_val_percentage = 0.8
+    batch_size = 64
+    epochs = 5
+    train_to_val_percentage = 0.9
 
     subject_list = [
         'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ' ,'RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
@@ -890,9 +894,10 @@ if __name__ == '__main__':
 
 
     # Randomly split the subjects into training and testing sets
-    train_subjects = random.sample(subject_list, len(subject_list) - 3)
+    train_subjects = random.sample(subject_list, len(subject_list) - 2)
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
 
+    train_subjects=['BIJVZD']
     # Determine the next available run number
     existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]
     if existing_folders:
@@ -902,7 +907,7 @@ if __name__ == '__main__':
     else:
         next_run_number = 1
 
-    model_brainwaves=True
+    model_brainwaves=False
     if model_brainwaves:
         results_folder = "."
         subject=("BIJVZD")
@@ -913,8 +918,9 @@ if __name__ == '__main__':
         # Assume SMOTE_eeg and labels are loaded
         model_3d_representation(SMOTE_eeg, SMOTE_labels, 0)
 
+    choose_model = "ShallowConvNet" # "ATCNet"
     training = True
-    testing = True
+    testing = False
 
     if training or testing:
         # Create the results folder with the next consecutive number
