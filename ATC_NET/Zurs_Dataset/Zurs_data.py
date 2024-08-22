@@ -4,6 +4,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io
+from sklearn.svm import SVC
 
 import models
 from scipy.io import loadmat
@@ -13,7 +14,8 @@ from os.path import join
 import shutil
 from collections import Counter
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report, accuracy_score, \
+    precision_score, recall_score
 from keras.models import load_model
 from keras.callbacks import EarlyStopping
 from keras.metrics import Precision, Recall
@@ -378,18 +380,22 @@ def test(model, Z, w, subject):
 
     # Verify the class distribution in the testing set
     print("Testing set class distribution:", Counter(np.argmax(w, axis=1)))
-
-    # Evaluate the model on the testing data
-    loss, accuracy, precision, recall = model.evaluate(Z, w)
-    print(
-        f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
-
-    # Predict the labels for the testing set
-    y_pred = model.predict(Z)
-    y_pred_classes = np.argmax(y_pred, axis=1)
-    y_true_classes = np.argmax(w, axis=1)
-
-    save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
+    if isinstance(model, SVC):
+        y_pred_classes = model.predict(Z)
+        y_true_classes = np.argmax(w, axis=1)
+        accuracy = accuracy_score(y_true_classes, y_pred_classes)
+        precision = precision_score(y_true_classes, y_pred_classes)
+        recall = recall_score(y_true_classes, y_pred_classes)
+    else:
+        loss, accuracy, precision, recall = model.evaluate(Z, w)
+        # Predict the labels for the testing set
+        y_pred = model.predict(Z)
+        y_pred_classes = np.argmax(y_pred, axis=1)
+        y_true_classes = np.argmax(w, axis=1)
+        # Evaluate the model on the testing data
+        loss, accuracy, precision, recall = model.evaluate(Z, w)
+        print(f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
+        save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
 
 
 def draw_learning_curves(history, subjects):
@@ -528,6 +534,153 @@ def load_trained_model(model_path):
         The loaded Keras model.
     """
     return load_model(model_path)
+
+
+def train_atcnet(X, y, dataset_conf):
+    """
+    Train the ATCNet model on the provided dataset.
+
+    Parameters:
+    ----------
+    X : np.array
+        The input EEG data.
+    y : np.array
+        The labels for the EEG data.
+    dataset_conf : dict
+        Dictionary containing dataset configuration variables.
+
+    Returns:
+    -------
+    model : keras.Model
+        The trained ATCNet model.
+    """
+    model = models.ATCNet_(
+        n_classes=2, in_chans=dataset_conf['in_chans'], in_samples=dataset_conf['in_samples'],
+        n_windows=5, attention='mha',
+        eegn_F1=16, eegn_D=2, eegn_kernelSize=64, eegn_poolSize=7, eegn_dropout=0.3,
+        tcn_depth=2, tcn_kernelSize=dataset_conf['tcn_kernel'], tcn_filters=32, tcn_dropout=0.3, tcn_activation='elu'
+    )
+
+    return compile_and_train_model(model, X, y, dataset_conf)
+
+
+def train_shallowconvnet(X, y, dataset_conf):
+    """
+    Train the ShallowConvNet model on the provided dataset.
+
+    Parameters:
+    ----------
+    X : np.array
+        The input EEG data.
+    y : np.array
+        The labels for the EEG data.
+    dataset_conf : dict
+        Dictionary containing dataset configuration variables.
+
+    Returns:
+    -------
+    model : keras.Model
+        The trained ShallowConvNet model.
+    """
+    model = models.ShallowConvNet(nb_classes=2, Chans=dataset_conf['in_chans'], Samples=dataset_conf['in_samples'])
+    return compile_and_train_model(model, X, y, dataset_conf)
+
+
+def compile_and_train_model(model, X, y, dataset_conf):
+    """
+    Compile and train a Keras model on the provided dataset.
+
+    Parameters:
+    ----------
+    model : keras.Model
+        The Keras model to be compiled and trained.
+    X : np.array
+        The input EEG data.
+    y : np.array
+        The labels for the EEG data.
+    dataset_conf : dict
+        Dictionary containing dataset configuration variables.
+
+    Returns:
+    -------
+    model : keras.Model
+        The trained Keras model.
+    """
+    model.compile(optimizer='adam', loss='categorical_crossentropy',
+                  metrics=['accuracy', Precision(), Recall()])
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=dataset_conf['train_to_val_percentage'],
+                                                      random_state=42)
+
+    print("Training set class distribution:", Counter(np.argmax(y_train, axis=1)))
+    print("Validation set class distribution:", Counter(np.argmax(y_val, axis=1)))
+
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=dataset_conf['epochs'],
+                        batch_size=dataset_conf['batch_size'], callbacks=[early_stopping])
+
+    loss, accuracy, precision, recall = model.evaluate(X_val, y_val)
+    print(f'Validation loss: {loss}, Validation accuracy: {accuracy}')
+
+    y_pred = model.predict(X_val)
+    y_pred_classes = np.argmax(y_pred, axis=1)
+    y_true = np.argmax(y_val, axis=1)
+
+    print('Plot Learning Curves .......')
+    draw_learning_curves(history,train_subjects)
+    save_metrics(accuracy, loss, precision, recall, subject="train_subjects", y_pred_classes=y_pred_classes,
+                 y_true_classes=y_true, stage="training")
+
+    return model
+
+
+def train_svm(X, y, dataset_conf):
+    """
+    Train an SVM model on the provided dataset.
+
+    Parameters:
+    ----------
+    X : np.array
+        The input EEG data.
+    y : np.array
+        The labels for the EEG data.
+    dataset_conf : dict
+        Dictionary containing dataset configuration variables.
+
+    Returns:
+    -------
+    model : sklearn.svm.SVC
+        The trained SVM model.
+    """
+    # Flattening the input data for SVM as it requires 2D input (samples, features)
+
+    print(f"X.shape = {X.shape}")
+    print(f"y.shape = {y.shape}")
+    X_flattened = X.reshape(X.shape[0], -1)
+
+    X_train, X_val, y_train, y_val = train_test_split(X_flattened, np.argmax(y, axis=1),
+                                                      test_size=dataset_conf['train_to_val_percentage'],
+                                                      random_state=42)
+
+    print("Training set class distribution:", Counter(y_train))
+    print("Validation set class distribution:", Counter(y_val))
+
+    model = SVC(kernel='linear', probability=True)
+    model.fit(X_train, y_train)
+
+    y_pred_classes = model.predict(X_val)
+    accuracy = accuracy_score(y_val, y_pred_classes)
+    precision = precision_score(y_val, y_pred_classes)
+    recall = recall_score(y_val, y_pred_classes)
+
+    print(f'Validation accuracy: {accuracy}')
+    print(f'Validation precision: {precision}')
+    print(f'Validation recall: {recall}')
+
+    save_metrics(accuracy, None, precision, recall, subject="train_subjects", y_pred_classes=y_pred_classes,
+                 y_true_classes=y_val, stage="training")
+
+    return model
 
 
 def train(subjects, X,y, in_chans, in_samples, tcn_kernel, epochs, batch_size, train_to_val_percentage):
@@ -708,9 +861,9 @@ def interpolate_data(subject):
     # BIJVZD:  eeg[60][40][128][256] clicks_array[40][15360]
 
     # Apply interpolation to double the number of time samples
-    eeg_interpolated = interpolate_eeg(eeg, target_samples)
+    eeg_interpolated = interpolate_eeg(eeg, dataset_conf["target_samples"])
 
-    clicks_array_interpolated = interpolate_clicks(clicks_array, target_samples * total_sounds)
+    clicks_array_interpolated = interpolate_clicks(clicks_array, dataset_conf['target_samples'] * total_sounds)
 
     eeg = eeg_interpolated
     clicks_array = clicks_array_interpolated
@@ -731,9 +884,9 @@ def interpolate_data(subject):
 
         # for 60 2-sec sounds sounded in a trial (in total 512*60) step every 2 seconds (512 time samples) and label:
         end = eeg_flat.shape[0]
-        step = in_samples
+        step = dataset_conf['in_samples']
         for start_idx in range(0, end, step):
-            end_idx = start_idx + in_samples
+            end_idx = start_idx + dataset_conf['in_samples']
             window_data = eeg_flat[start_idx:end_idx].T  # Transpose to get (electrode_num, in_samples)
             X.append(window_data[np.newaxis, :])  # Add new axis for the 1 in shape
 
@@ -853,21 +1006,26 @@ def model_3d_representation(SMOTE_eeg, SMOTE_labels, sample_index):
 
 if __name__ == '__main__':
 
-
-
     # Update paths and model configuration here
-    n_classes = 2
-    in_chans = 128
-    original_samples = 256
-    in_samples = 512
-    target_samples = 512
-    tcn_kernel = 4
-    n_windows = 5
-    n_subjects = 15
-    total_sounds = 60
-    batch_size = 64
-    epochs = 5
-    train_to_val_percentage = 0.9
+    dataset_conf = {
+        'n_classes': 2,
+        'in_chans': 128,
+        'original_samples' : 256,
+        'in_samples': 512,
+        'tcn_kernel': 4,
+        'n_windows': 5,
+        'n_subjects': 15,
+        'total_sounds': 60,
+        'batch_size': 64,
+        'epochs': 2,
+        'train_to_val_percentage': 0.5
+    }
+    model_arr = ["ShallowConvNet", "ATCNet", "SVM"]
+    choose_model = model_arr[2]
+    training = True
+    testing = True
+    model_brainwaves=False
+    results_folder = "."
 
     subject_list = [
         'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ' ,'RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
@@ -898,6 +1056,7 @@ if __name__ == '__main__':
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
 
     train_subjects=['BIJVZD']
+    test_subjects = train_subjects
     # Determine the next available run number
     existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]
     if existing_folders:
@@ -907,9 +1066,7 @@ if __name__ == '__main__':
     else:
         next_run_number = 1
 
-    model_brainwaves=False
     if model_brainwaves:
-        results_folder = "."
         subject=("BIJVZD")
         # (4574, 1, 128, 512)
         # (4574, 2)
@@ -918,24 +1075,18 @@ if __name__ == '__main__':
         # Assume SMOTE_eeg and labels are loaded
         model_3d_representation(SMOTE_eeg, SMOTE_labels, 0)
 
-    choose_model = "ShallowConvNet" # "ATCNet"
-    training = True
-    testing = False
-
     if training or testing:
         # Create the results folder with the next consecutive number
         results_folder = f'results_run_{next_run_number}'
-        #if os.path.exists(results_folder):
-        # shutil.rmtree(results_folder)
         os.makedirs(results_folder)
 
         # Save the subject split information in the results folder
         with open(os.path.join(results_folder, 'subject_info.txt'), 'w') as f:
             f.write(f"Training Subjects: {', '.join(train_subjects)}\n")
             f.write(f"Testing Subjects: {', '.join(test_subjects)}\n")
-            f.write(f"epochs = {epochs}\n")
-            f.write(f"batch_size = {batch_size}\n")
-            f.write(f"validation percentage from train = {train_to_val_percentage}\n")
+            f.write(f"epochs = {dataset_conf['epochs']}\n")
+            f.write(f"batch_size = {dataset_conf['batch_size']}\n")
+            f.write(f"validation percentage from train = {dataset_conf['train_to_val_percentage']}\n")
 
     if(training):
         print(f'Training on subjects: {train_subjects}')
@@ -949,7 +1100,13 @@ if __name__ == '__main__':
         X_train = np.concatenate(X_train, axis=0)
         y_train = np.concatenate(y_train, axis=0)
 
-        model = train(train_subjects,X_train, y_train, in_chans=in_chans, in_samples=in_samples, tcn_kernel=tcn_kernel, epochs=epochs, batch_size=batch_size, train_to_val_percentage=train_to_val_percentage)
+        if choose_model == "ATCNet":
+            model = train_atcnet(X_train, y_train, dataset_conf)
+        elif choose_model == "ShallowConvNet":
+            model = train_shallowconvnet(X_train, y_train, dataset_conf)
+        elif choose_model == "SVM":
+            train_svm(X_train, y_train,dataset_conf)
+
         model.save(model_path)
         print(f'Model saved to {model_path}')
 
