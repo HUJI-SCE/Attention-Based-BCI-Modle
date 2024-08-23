@@ -1055,18 +1055,18 @@ if __name__ == '__main__':
         'n_subjects': 15,
         'total_sounds': 60,
         'batch_size': 64,
-        'epochs': 2,
+        'epochs': 30,
         'train_to_val_percentage': 0.5
     }
     model_arr = ["ShallowConvNet", "ATCNet", "SVM"]
-    choose_model = model_arr[2]
+    choose_model = model_arr[1]
     training = True
     testing = True
     model_brainwaves=False
     results_folder = "."
 
     subject_list = [
-        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ' ,'RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS', 'ZLIDEI', 'BIJVZD', 'EFFEUS'
+        'HGWLOI', 'GQEVXE', 'HITXMV', 'HNJUPJ' ,'RHQBHE', 'RMAALZ', 'TUZEZT', 'UOBXJO', 'WWDVDF', 'YMKSWS' #, 'ZLIDEI', 'BIJVZD', 'EFFEUS'
         #, 'misssing two matrices NFICHK', 'missing 2 matrices TQZHZT',
     ]
     model_path = 'trained_model.h5'
@@ -1090,11 +1090,9 @@ if __name__ == '__main__':
 
 
     # Randomly split the subjects into training and testing sets
-    train_subjects = random.sample(subject_list, len(subject_list) - 2)
+    train_subjects = random.sample(subject_list, len(subject_list) - 3)
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
 
-    train_subjects=['BIJVZD']
-    test_subjects = train_subjects
     # Determine the next available run number
     existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]
     if existing_folders:
@@ -1122,6 +1120,8 @@ if __name__ == '__main__':
             f.write(f"epochs = {dataset_conf['epochs']}\n")
             f.write(f"batch_size = {dataset_conf['batch_size']}\n")
             f.write(f"validation percentage from train = {dataset_conf['train_to_val_percentage']}\n")
+            f.write(f"model = {choose_model}"
+
 
     if(training):
         print(f'Training on subjects: {train_subjects}')
@@ -1144,6 +1144,8 @@ if __name__ == '__main__':
         if choose_model != "SVM":
             model.save(model_path)
             print(f'Model saved to {model_path}')
+        plot_model(model, to_file=os.path.join(results_folder, f"model_{choose_model}_structure.png"), show_shapes=True, show_layer_names=True)
+        
 
 
     if testing:
