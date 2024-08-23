@@ -353,6 +353,34 @@ def segment_eeg_data_with_overlap(eeg, labels, window_duration, overlap, n_class
     return segmented_data, segmented_labels
 
 
+def custom_hinge_loss(y_true, y_pred):
+    """
+    Calculate the hinge loss for a Support Vector Machine (SVM).
+
+    Hinge loss is used in SVM to penalize misclassifications and
+    samples that fall within the margin boundaries.
+
+    Parameters:
+    -----------
+    y_true : array-like, shape (n_samples,)
+        True labels for each sample. Labels must be -1 or 1.
+
+    y_pred : array-like, shape (n_samples,)
+        Predicted decision values from the SVM (w * x + b).
+
+    Returns:
+    --------
+    loss : float
+        The average hinge loss across all samples.
+    --------
+    """
+    # Calculate hinge loss for each sample
+    loss_per_sample = np.maximum(0, 1 - y_true * y_pred)
+
+    # Return the mean hinge loss
+    return np.mean(loss_per_sample)
+
+
 def test(model, Z, w, subject):
     """
         Evaluates a trained model on test data and saves the metrics.
@@ -381,21 +409,29 @@ def test(model, Z, w, subject):
     # Verify the class distribution in the testing set
     print("Testing set class distribution:", Counter(np.argmax(w, axis=1)))
     if isinstance(model, SVC):
+        # Flattening the input data for SVM as it requires 2D input (samples, features)
+        # Convert w from one-hot encoding to class labels
+        w = np.argmax(w, axis=1)  # w.shape will be (4574,)
+        # Squeeze Z to remove the singleton dimension
+        Z = np.squeeze(Z, axis=1)  # Z.shape will be (4574, 128, 512)
+        # Calculate the mean across the last two dimensions (128, 512)
+        Z = np.mean(Z, axis=2)  # Z.shape will be (4574,128)
+        # Now Z and w are ready to be used for SVM training
         y_pred_classes = model.predict(Z)
-        y_true_classes = np.argmax(w, axis=1)
+        y_true_classes = w
         accuracy = accuracy_score(y_true_classes, y_pred_classes)
         precision = precision_score(y_true_classes, y_pred_classes)
         recall = recall_score(y_true_classes, y_pred_classes)
+        loss = custom_hinge_loss(y_true_classes,y_pred_classes)
     else:
-        loss, accuracy, precision, recall = model.evaluate(Z, w)
         # Predict the labels for the testing set
         y_pred = model.predict(Z)
         y_pred_classes = np.argmax(y_pred, axis=1)
         y_true_classes = np.argmax(w, axis=1)
         # Evaluate the model on the testing data
         loss, accuracy, precision, recall = model.evaluate(Z, w)
-        print(f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
-        save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
+    print(f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
+    save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
 
 
 def draw_learning_curves(history, subjects):
@@ -653,12 +689,14 @@ def train_svm(X, y, dataset_conf):
         The trained SVM model.
     """
     # Flattening the input data for SVM as it requires 2D input (samples, features)
-
-    print(f"X.shape = {X.shape}")
-    print(f"y.shape = {y.shape}")
-    X_flattened = X.reshape(X.shape[0], -1)
-
-    X_train, X_val, y_train, y_val = train_test_split(X_flattened, np.argmax(y, axis=1),
+    # Convert y from one-hot encoding to class labels
+    y = np.argmax(y, axis=1)  # y_labels.shape will be (4574,)
+    # Squeeze X to remove the singleton dimension
+    X = np.squeeze(X, axis=1)  # X_squeezed.shape will be (4574, 128, 512)
+    # Calculate the mean across the last two dimensions (128, 512)
+    X = np.mean(X, axis=2)  # X_mean.shape will be (4574,128)
+    # Now X_mean and y are ready to be used for SVM training
+    X_train, X_val, y_train, y_val = train_test_split(X, y,
                                                       test_size=dataset_conf['train_to_val_percentage'],
                                                       random_state=42)
 
@@ -672,7 +710,7 @@ def train_svm(X, y, dataset_conf):
     accuracy = accuracy_score(y_val, y_pred_classes)
     precision = precision_score(y_val, y_pred_classes)
     recall = recall_score(y_val, y_pred_classes)
-
+    loss = custom_hinge_loss(y_val, y_pred_classes)
     print(f'Validation accuracy: {accuracy}')
     print(f'Validation precision: {precision}')
     print(f'Validation recall: {recall}')
@@ -1068,11 +1106,8 @@ if __name__ == '__main__':
 
     if model_brainwaves:
         subject=("BIJVZD")
-        # (4574, 1, 128, 512)
-        # (4574, 2)
         SMOTE_labels    = np.load(f'subjects/{subject}/SMOTEed_eeg_labels_{subject}.npy')
         SMOTE_eeg       = np.load(f'subjects/{subject}/SMOTEed_eeg_data_{subject}.npy')
-        # Assume SMOTE_eeg and labels are loaded
         model_3d_representation(SMOTE_eeg, SMOTE_labels, 0)
 
     if training or testing:
@@ -1105,10 +1140,10 @@ if __name__ == '__main__':
         elif choose_model == "ShallowConvNet":
             model = train_shallowconvnet(X_train, y_train, dataset_conf)
         elif choose_model == "SVM":
-            train_svm(X_train, y_train,dataset_conf)
-
-        model.save(model_path)
-        print(f'Model saved to {model_path}')
+            model = train_svm(X_train, y_train,dataset_conf)
+        if choose_model != "SVM":
+            model.save(model_path)
+            print(f'Model saved to {model_path}')
 
 
     if testing:
