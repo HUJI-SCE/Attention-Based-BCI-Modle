@@ -431,10 +431,15 @@ def test(model, Z, w, subject):
         # Evaluate the model on the testing data
         loss, accuracy, precision, recall = model.evaluate(Z, w)
 
-    # Call the separate ROC plotting function
-    y_probs = y_pred_classes[:, 1]  # Assumes binary classification with class 1 probabilities
-    plot_and_save_roc_curve(y_true_classes, y_probs,
-                            file_name=os.path.join(results_folder, f'testing_stage_{subject}_roc_curve.png'))
+    # Assumes binary classification with class 1 probabilities
+    if isinstance(model, SVC):
+        y_probs = y_pred_classes
+    else:
+        y_probs = y_pred[:, 1]
+
+        # Call the separate ROC plotting function
+        plot_and_save_roc_curve(y_true_classes, y_probs,
+                                file_name=os.path.join(results_folder, f'testing_stage_{subject}_roc_curve'))
 
     print(f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
     save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
@@ -627,9 +632,9 @@ def train_shallowconvnet(X, y, dataset_conf):
     return compile_and_train_model(model, X, y, dataset_conf)
 
 
-def plot_and_save_roc_curve(y_true, y_probs, file_name='roc_curve.png'):
+def plot_and_save_roc_curve(y_true, y_probs, file_name='roc_curve'):
     """
-    Plots the ROC curve and saves it to a file.
+    Plots the ROC curve, checks various thresholds, and saves it to a file.
 
     Parameters:
     ----------
@@ -645,13 +650,33 @@ def plot_and_save_roc_curve(y_true, y_probs, file_name='roc_curve.png'):
     None
     """
     # Compute ROC curve and ROC area
-    fpr, tpr, _ = roc_curve(y_true, y_probs)
+    fpr, tpr, thresholds = roc_curve(y_true, y_probs)
     roc_auc = auc(fpr, tpr)
+
+    # Compute Youden's Index and Distance to Top-Left Corner
+    youden_index = tpr - fpr
+    optimal_idx_youden = np.argmax(youden_index)
+    optimal_threshold_youden = thresholds[optimal_idx_youden]
+
+    distances = np.sqrt((1 - tpr)**2 + fpr**2)
+    optimal_idx_distance = np.argmin(distances)
+    optimal_threshold_distance = thresholds[optimal_idx_distance]
+
+
+    # Write metrics to a text file
+    with open(os.path.join(f"{file_name}.txt"), 'w') as file:
+        file.write(f"Optimal threshold by Youden's Index: {optimal_threshold_youden:.2f}\n")
+        file.write(f"Optimal threshold by distance to top-left: {optimal_threshold_distance:.2f}\n")
 
     # Plotting the ROC curve
     plt.figure()
     plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
     plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+
+    # Mark the optimal thresholds on the ROC curve
+    plt.scatter(fpr[optimal_idx_youden], tpr[optimal_idx_youden], color='green', label=f'Optimal Youden (thresh = {optimal_threshold_youden:.2f})')
+    plt.scatter(fpr[optimal_idx_distance], tpr[optimal_idx_distance], color='red', label=f'Optimal Dist (thresh = {optimal_threshold_distance:.2f})')
+
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
@@ -660,7 +685,7 @@ def plot_and_save_roc_curve(y_true, y_probs, file_name='roc_curve.png'):
     plt.legend(loc="lower right")
 
     # Save the plot to a file
-    plt.savefig(file_name)
+    plt.savefig(os.path.join(f"{file_name}.png"))
     plt.close()
 
 
@@ -755,6 +780,13 @@ def train_svm(X, y, dataset_conf):
     model.fit(X_train, y_train)
 
     y_pred_classes = model.predict(X_val)
+
+    # Call the separate ROC plotting function
+    y_probs = y_pred_classes # Assumes binary classification with class 1 probabilities
+    plot_and_save_roc_curve(y_train, y_probs,
+                            file_name=os.path.join(results_folder, f'training_stage_{train_subjects}_roc_curve.png'))
+
+
     accuracy = accuracy_score(y_val, y_pred_classes)
     precision = precision_score(y_val, y_pred_classes)
     recall = recall_score(y_val, y_pred_classes)
@@ -1107,7 +1139,7 @@ if __name__ == '__main__':
         'train_to_val_percentage': 0.5
     }
     model_arr = ["ShallowConvNet", "ATCNet", "SVM"]
-    choose_model = model_arr[0]
+    choose_model = model_arr[2]
     training = True
     testing = True
     model_brainwaves=False
