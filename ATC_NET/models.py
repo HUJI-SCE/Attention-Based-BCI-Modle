@@ -630,7 +630,7 @@ def ShallowConvNet(nb_classes, Chans = 64, Samples = 128, dropoutRate = 0.5):
 
     block1       = Conv2D(40, (1, 25), 
                                  input_shape=(Chans, Samples, 1),
-                                 kernel_constraint = max_norm(2., axis=(0,1,2)))(input_2)
+                                 kernel_constraint = max_norm(2., axis=(0,1,2)))(input_main)
 #    block1       = Conv2D(40, (Chans, 1), use_bias=False, 
 #                         kernel_constraint = max_norm(2., axis=(0,1,2)))(block1)
     block1       = BatchNormalization(epsilon=1e-05, momentum=0.9)(block1)

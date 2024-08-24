@@ -1060,7 +1060,7 @@ if __name__ == '__main__':
     }
     model_arr = ["ShallowConvNet", "ATCNet", "SVM"]
     choose_model = model_arr[1]
-    training = True
+    training =True 
     testing = True
     model_brainwaves=False
     results_folder = "."
@@ -1090,7 +1090,7 @@ if __name__ == '__main__':
 
 
     # Randomly split the subjects into training and testing sets
-    train_subjects = random.sample(subject_list, len(subject_list) - 3)
+    train_subjects = random.sample(subject_list, len(subject_list) - 2)
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
 
     # Determine the next available run number
@@ -1120,8 +1120,7 @@ if __name__ == '__main__':
             f.write(f"epochs = {dataset_conf['epochs']}\n")
             f.write(f"batch_size = {dataset_conf['batch_size']}\n")
             f.write(f"validation percentage from train = {dataset_conf['train_to_val_percentage']}\n")
-            f.write(f"model = {choose_model}"
-
+            f.write(f"model = {choose_model}")
 
     if(training):
         print(f'Training on subjects: {train_subjects}')
@@ -1144,13 +1143,14 @@ if __name__ == '__main__':
         if choose_model != "SVM":
             model.save(model_path)
             print(f'Model saved to {model_path}')
-        plot_model(model, to_file=os.path.join(results_folder, f"model_{choose_model}_structure.png"), show_shapes=True, show_layer_names=True)
+            plot_model(model, to_file=os.path.join(results_folder, f"model_{choose_model}_structure.png"), show_shapes=True, show_layer_names=True)
         
 
 
     if testing:
         if not training:
             model = load_trained_model(model_path)
+            plot_model(model, to_file=os.path.join(results_folder, f"model_{choose_model}_structure.png"), show_shapes=True, show_layer_names=True)
         print(f'Testing on subjects: {test_subjects}')
         # Test the model on the remaining subjects
         for subject in test_subjects:
