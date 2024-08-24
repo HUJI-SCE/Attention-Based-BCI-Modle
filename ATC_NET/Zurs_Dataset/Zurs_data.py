@@ -1135,7 +1135,7 @@ if __name__ == '__main__':
         'n_subjects': 15,
         'total_sounds': 60,
         'batch_size': 64,
-        'epochs': 2,
+        'epochs': 30,
         'train_to_val_percentage': 0.5
     }
     model_arr = ["ShallowConvNet", "ATCNet", "SVM"]
