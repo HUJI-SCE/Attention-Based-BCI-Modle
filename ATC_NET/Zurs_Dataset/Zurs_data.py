@@ -437,9 +437,8 @@ def test(model, Z, w, subject):
     else:
         y_probs = y_pred[:, 1]
 
-        # Call the separate ROC plotting function
-        plot_and_save_roc_curve(y_true_classes, y_probs,
-                                file_name=os.path.join(results_folder, f'testing_stage_{subject}_roc_curve'))
+    # Call the separate ROC plotting function
+    plot_and_save_roc_curve(y_true_classes, y_probs,file_name=os.path.join(results_folder, f'testing_stage_{subject}_roc_curve'))
 
     print(f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
     save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
@@ -733,7 +732,7 @@ def compile_and_train_model(model, X, y, dataset_conf):
     # Call the separate ROC plotting function
     y_probs = y_pred[:, 1]  # Assumes binary classification with class 1 probabilities
     plot_and_save_roc_curve(y_true, y_probs,
-                            file_name=os.path.join(results_folder, f'training_stage_{subject}_roc_curve.png'))
+                            file_name=os.path.join(results_folder, f'training_stage_roc_curve'))
 
     print('Plot Learning Curves .......')
     draw_learning_curves(history,train_subjects)
@@ -784,7 +783,7 @@ def train_svm(X, y, dataset_conf):
     # Call the separate ROC plotting function
     y_probs = y_pred_classes # Assumes binary classification with class 1 probabilities
     plot_and_save_roc_curve(y_train, y_probs,
-                            file_name=os.path.join(results_folder, f'training_stage_{train_subjects}_roc_curve.png'))
+                            file_name=os.path.join(results_folder, f'training_stage_roc_curve'))
 
 
     accuracy = accuracy_score(y_val, y_pred_classes)
