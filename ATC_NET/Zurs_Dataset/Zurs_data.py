@@ -15,7 +15,7 @@ import shutil
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report, accuracy_score, \
-    precision_score, recall_score
+    precision_score, recall_score, roc_curve, auc
 from keras.models import load_model
 from keras.callbacks import EarlyStopping
 from keras.metrics import Precision, Recall
@@ -430,6 +430,12 @@ def test(model, Z, w, subject):
         y_true_classes = np.argmax(w, axis=1)
         # Evaluate the model on the testing data
         loss, accuracy, precision, recall = model.evaluate(Z, w)
+
+    # Call the separate ROC plotting function
+    y_probs = y_pred_classes[:, 1]  # Assumes binary classification with class 1 probabilities
+    plot_and_save_roc_curve(y_true_classes, y_probs,
+                            file_name=os.path.join(results_folder, f'testing_stage_{subject}_roc_curve.png'))
+
     print(f'Testing loss: {loss}, Testing accuracy: {accuracy}, Testing precision: {precision}, Testing recall: {recall}')
     save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes,stage = "Testing")
 
@@ -479,7 +485,6 @@ def draw_learning_curves(history, subjects):
 def save_metrics(accuracy, loss, precision, recall, subject, y_pred_classes, y_true_classes, stage):
     """
     Saves the evaluation metrics and confusion matrix to a file.
-
     This function saves the accuracy, loss, precision, and recall metrics,
     along with the confusion matrix, to a text file. The file is named according
     to the subject and the stage of evaluation (e.g., training, testing).
@@ -622,6 +627,43 @@ def train_shallowconvnet(X, y, dataset_conf):
     return compile_and_train_model(model, X, y, dataset_conf)
 
 
+def plot_and_save_roc_curve(y_true, y_probs, file_name='roc_curve.png'):
+    """
+    Plots the ROC curve and saves it to a file.
+
+    Parameters:
+    ----------
+    y_true : np.array
+        True binary labels.
+    y_probs : np.array
+        Predicted probabilities for the positive class.
+    file_name : str
+        The name of the file where the plot will be saved.
+
+    Returns:
+    -------
+    None
+    """
+    # Compute ROC curve and ROC area
+    fpr, tpr, _ = roc_curve(y_true, y_probs)
+    roc_auc = auc(fpr, tpr)
+
+    # Plotting the ROC curve
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc="lower right")
+
+    # Save the plot to a file
+    plt.savefig(file_name)
+    plt.close()
+
+
 def compile_and_train_model(model, X, y, dataset_conf):
     """
     Compile and train a Keras model on the provided dataset.
@@ -659,8 +701,14 @@ def compile_and_train_model(model, X, y, dataset_conf):
     print(f'Validation loss: {loss}, Validation accuracy: {accuracy}')
 
     y_pred = model.predict(X_val)
+
     y_pred_classes = np.argmax(y_pred, axis=1)
     y_true = np.argmax(y_val, axis=1)
+
+    # Call the separate ROC plotting function
+    y_probs = y_pred[:, 1]  # Assumes binary classification with class 1 probabilities
+    plot_and_save_roc_curve(y_true, y_probs,
+                            file_name=os.path.join(results_folder, f'training_stage_{subject}_roc_curve.png'))
 
     print('Plot Learning Curves .......')
     draw_learning_curves(history,train_subjects)
@@ -1055,12 +1103,12 @@ if __name__ == '__main__':
         'n_subjects': 15,
         'total_sounds': 60,
         'batch_size': 64,
-        'epochs': 30,
+        'epochs': 2,
         'train_to_val_percentage': 0.5
     }
     model_arr = ["ShallowConvNet", "ATCNet", "SVM"]
-    choose_model = model_arr[1]
-    training =True 
+    choose_model = model_arr[0]
+    training = True
     testing = True
     model_brainwaves=False
     results_folder = "."
@@ -1093,6 +1141,9 @@ if __name__ == '__main__':
     train_subjects = random.sample(subject_list, len(subject_list) - 2)
     test_subjects = [sub for sub in subject_list if sub not in train_subjects]
 
+    # train_subjects = ['BIJVZD']
+    # test_subjects = train_subjects
+
     # Determine the next available run number
     existing_folders = [f for f in os.listdir() if f.startswith('results_run_')]
     if existing_folders:
@@ -1121,6 +1172,7 @@ if __name__ == '__main__':
             f.write(f"batch_size = {dataset_conf['batch_size']}\n")
             f.write(f"validation percentage from train = {dataset_conf['train_to_val_percentage']}\n")
             f.write(f"model = {choose_model}")
+
 
     if(training):
         print(f'Training on subjects: {train_subjects}')
