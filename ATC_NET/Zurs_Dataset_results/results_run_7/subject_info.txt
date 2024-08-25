@@ -1,0 +1,6 @@
+Training Subjects: HITXMV, HNJUPJ, YMKSWS, WWDVDF, HGWLOI, TUZEZT, UOBXJO, GQEVXE
+Testing Subjects: RHQBHE, RMAALZ
+epochs = 30
+batch_size = 64
+validation percentage from train = 0.5
+model = SVM
