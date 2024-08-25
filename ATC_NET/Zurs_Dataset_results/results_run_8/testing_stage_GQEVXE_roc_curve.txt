@@ -1,2 +1,2 @@
-Optimal threshold by Youden's Index: 0.28
-Optimal threshold by distance to top-left: 0.27
+Optimal threshold by Youden's Index: 0.09
+Optimal threshold by distance to top-left: 0.18

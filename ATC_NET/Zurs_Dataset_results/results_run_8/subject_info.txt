@@ -1,4 +1,4 @@
-Training Subjects: HITXMV, TUZEZT, YMKSWS, UOBXJO, RHQBHE, HGWLOI, RMAALZ, HNJUPJ
+Training Subjects: HNJUPJ, HGWLOI, YMKSWS, HITXMV, RHQBHE, UOBXJO, RMAALZ, TUZEZT
 Testing Subjects: GQEVXE, WWDVDF
 epochs = 30
 batch_size = 64
