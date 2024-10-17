@@ -1,6 +1,0 @@
-Training Subjects: HNJUPJ, HGWLOI, YMKSWS, HITXMV, RHQBHE, UOBXJO, RMAALZ, TUZEZT
-Testing Subjects: GQEVXE, WWDVDF
-epochs = 30
-batch_size = 64
-validation percentage from train = 0.5
-model = ShallowConvNet
