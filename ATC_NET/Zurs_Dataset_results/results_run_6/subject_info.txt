@@ -1,5 +1,0 @@
-Training Subjects: RHQBHE, ZLIDEI, UOBXJO, RMAALZ, YMKSWS, EFFEUS, HITXMV, TUZEZT, WWDVDF, HNJUPJ, BIJVZD, GQEVXE
-Testing Subjects: HGWLOI
-epochs = 100
-batch_size = 64
-validation percentage from train = 0.9
